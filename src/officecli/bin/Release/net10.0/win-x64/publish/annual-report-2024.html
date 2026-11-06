@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>annual-report-2024.xlsx</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f0f0;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+.file-title {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #217346;
+    color: #fff;
+}
+.sheet-tabs {
+    display: flex;
+    background: #e0e0e0;
+    border-top: 1px solid #ccc;
+    overflow-x: auto;
+    padding: 0 8px;
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+.sheet-tab {
+    --tab-color: #e8e8e8;
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-top: none;
+    background: var(--tab-color);
+    color: #fff;
+    margin-bottom: 0;
+    border-radius: 0 0 3px 3px;
+    white-space: nowrap;
+    user-select: none;
+    position: relative;
+    transition: background 0.15s, color 0.15s;
+}
+.sheet-tab[style*="--tab-color:#e8e8e8"], .sheet-tab:not([style*="--tab-color"]) {
+    color: #333;
+}
+.sheet-tab:hover { opacity: 0.85; }
+.sheet-tab.active {
+    background: linear-gradient(to bottom, #fff 60%, color-mix(in srgb, var(--tab-color) 30%, #fff)) !important;
+    color: #333 !important;
+    border-color: #aaa;
+    border-bottom: 3px solid var(--tab-color);
+    font-weight: 600;
+}
+.sheet-slider { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.sheet-content { background: #fff; display: none; flex: 1; min-height: 0; }
+.sheet-content.active { display: flex; flex-direction: column; }
+.table-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    background: #fff;
+}
+table {
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: 'Calibri', 'Segoe UI', sans-serif;
+    table-layout: fixed;
+}
+.row-header-col { width: 30pt; }
+th {
+    background: #f8f8f8;
+    border: 1px solid #e0e0e0;
+    font-weight: normal;
+    color: #666;
+    font-size: 10px;
+    text-align: center;
+    padding: 2px 4px;
+}
+.corner-cell { background: #f0f0f0; z-index: 4; }
+.col-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f8f8;
+    min-width: 50px;
+    cursor: s-resize;
+}
+.row-header {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f8f8f8;
+    min-width: 40px;
+    cursor: e-resize;
+    /* Drop right border so the data cell's own (often darker) left border shows through.
+       Otherwise, with border-collapse, the row-header's light grey right border can win
+       the collapse contest and erase the merged-cell left border (rowspan cells especially). */
+    border-right: none;
+}
+td {
+    /* Default gridlines are painted with inset box-shadow instead of
+       border, so they do NOT participate in border-collapse tie-breaking.
+       Explicit OOXML borders (rendered as inline border styles on cells
+       with an OOXML style) always win at cell boundaries; missing cells
+       / style-0 cells no longer erase neighbours' black borders via the
+       CSS position-based tie-break. Right+bottom gridlines are owned by
+       each cell; first-row top and first-col left gridlines are added
+       via the :first-child rules below. Scoped to table:not(.no-grid) so
+       sheets with showGridLines=false suppress the default gridlines while
+       still honouring explicit OOXML cell borders (inline styles). */
+    padding: 2px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    max-width: 500px;
+    word-break: break-all; /* CJK text wrapping support */
+}
+table:not(.no-grid) td { box-shadow: inset -1px -1px 0 #e0e0e0; }
+/* Text spill: a left/general text cell with empty right-neighbours paints
+   its overflow across them (Excel fidelity). The td stays 1 column wide so
+   borders/gridlines/merges are unaffected; overflow:visible lets the inner
+   span bleed into the (empty) neighbour cells. The span clips at max-width =
+   own width + summed empty-neighbour widths, stopping before the first
+   occupied cell — matching real Excel. */
+td.spill { overflow: visible; }
+td.spill .spill-text {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    vertical-align: bottom;
+}
+/* Shrink-to-fit: the font is compressed (inline font-size) so the whole
+   string fits the column. Keep it inline-block + clip (never ellipsis) so
+   the full text shows; the td's ellipsis rule must not re-truncate it. */
+.shrink-fit {
+    display: inline-block;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: visible;
+}
+table:not(.no-grid) tbody tr:first-child td { box-shadow: inset -1px -1px 0 #e0e0e0, inset 0 1px 0 #e0e0e0; }
+table:not(.no-grid) tr td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 0 0 #e0e0e0; }
+table:not(.no-grid) tbody tr:first-child td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 1px 0 #e0e0e0; }
+.empty-sheet {
+    padding: 40px;
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+}
+/* Chart containers */
+.chart-container {
+    margin: 16px auto;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.chart-container svg { display: block; }
+/* Truncation warning */
+.truncation-warning {
+    padding: 8px 16px;
+    background: #FFF3CD;
+    color: #856404;
+    border: 1px solid #FFEEBA;
+    font-size: 12px;
+    text-align: center;
+    margin: 4px 0;
+}
+/* Screen reader only */
+.sr-only { position:absolute; clip:rect(0 0 0 0); width:1px; height:1px; overflow:hidden; }
+/* Print styles */
+@media print {
+    .file-title, .sheet-tabs { display: none !important; }
+    .table-wrapper { max-height: none !important; overflow: visible !important; flex: none !important; }
+    body { background: #fff !important; min-height: auto !important; }
+    .sheet-content { display: block !important; flex: none !important; }
+    td { max-width: none !important; white-space: normal !important; overflow: visible !important; }
+}
+:root,
+[data-theme="light"] {
+  --office-preview-bg: #ffffff;
+  --office-preview-text: #111827;
+  --office-preview-muted: #6b7280;
+  --office-preview-surface: #f8fafc;
+  --office-preview-surface-2: #f3f4f6;
+  --office-preview-border: #d0d7de;
+  --office-preview-selection: rgba(37, 99, 235, 0.16);
+}
+
+[data-theme="dark"] {
+  --office-preview-bg: #0f172a;
+  --office-preview-text: #e5e7eb;
+  --office-preview-muted: #94a3b8;
+  --office-preview-surface: #111827;
+  --office-preview-surface-2: #1e293b;
+  --office-preview-border: #334155;
+  --office-preview-selection: rgba(96, 165, 250, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --office-preview-bg: #0f172a;
+    --office-preview-text: #e5e7eb;
+    --office-preview-muted: #94a3b8;
+    --office-preview-surface: #111827;
+    --office-preview-surface-2: #1e293b;
+    --office-preview-border: #334155;
+    --office-preview-selection: rgba(96, 165, 250, 0.22);
+  }
+}
+
+body {
+  background: var(--office-preview-bg);
+  color: var(--office-preview-text);
+}
+</style>
+</head>
+<body>
+<div class="file-title">annual-report-2024.xlsx</div>
+<div class="sheet-slider">
+<div class="sheet-content active" data-sheet="0">
+<div class="table-wrapper" style="position:relative">
+<table style="width:118.54pt">
+<caption class="sr-only">Financial Summary</caption>
+<colgroup><col class="row-header-col"><col style="width:44.27pt"><col style="width:44.27pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Financial Summary/col[A]">A</th><th class="col-header" data-path="/Financial Summary/col[B]">B</th></tr></thead>
+<tbody>
+<tr data-row="0-1"><th class="row-header" data-path="/Financial Summary/row[1]">1</th><td data-path="/Financial Summary/A1" class="spill" style="font-size:11pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:88.54pt">Annual Report 2024 - Financial Summary</span></td><td data-path="/Financial Summary/B1" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-2"><th class="row-header" data-path="/Financial Summary/row[2]">2</th><td data-path="/Financial Summary/A2" style="font-size:11pt;font-family:'Calibri';color:#000000"></td><td data-path="/Financial Summary/B2" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-3"><th class="row-header" data-path="/Financial Summary/row[3]">3</th><td data-path="/Financial Summary/A3" class="spill" style="font-size:11pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:88.54pt">Revenue</span></td><td data-path="/Financial Summary/B3" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-4"><th class="row-header" data-path="/Financial Summary/row[4]">4</th><td data-path="/Financial Summary/A4" style="font-size:11pt;font-family:'Calibri';color:#000000">Total Revenue</td><td data-path="/Financial Summary/B4" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">45200000</td></tr>
+<tr data-row="0-5"><th class="row-header" data-path="/Financial Summary/row[5]">5</th><td data-path="/Financial Summary/A5" style="font-size:11pt;font-family:'Calibri';color:#000000">Product Revenue</td><td data-path="/Financial Summary/B5" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">32000000</td></tr>
+<tr data-row="0-6"><th class="row-header" data-path="/Financial Summary/row[6]">6</th><td data-path="/Financial Summary/A6" style="font-size:11pt;font-family:'Calibri';color:#000000">Services Revenue</td><td data-path="/Financial Summary/B6" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">13200000</td></tr>
+<tr data-row="0-7"><th class="row-header" data-path="/Financial Summary/row[7]">7</th><td data-path="/Financial Summary/A7" style="font-size:11pt;font-family:'Calibri';color:#000000"></td><td data-path="/Financial Summary/B7" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-8"><th class="row-header" data-path="/Financial Summary/row[8]">8</th><td data-path="/Financial Summary/A8" class="spill" style="font-size:11pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:88.54pt">Operating Expenses</span></td><td data-path="/Financial Summary/B8" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-9"><th class="row-header" data-path="/Financial Summary/row[9]">9</th><td data-path="/Financial Summary/A9" style="font-size:11pt;font-family:'Calibri';color:#000000">Cost of Goods Sold</td><td data-path="/Financial Summary/B9" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">18500000</td></tr>
+<tr data-row="0-10"><th class="row-header" data-path="/Financial Summary/row[10]">10</th><td data-path="/Financial Summary/A10" style="font-size:11pt;font-family:'Calibri';color:#000000">Research and Development</td><td data-path="/Financial Summary/B10" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">6800000</td></tr>
+<tr data-row="0-11"><th class="row-header" data-path="/Financial Summary/row[11]">11</th><td data-path="/Financial Summary/A11" style="font-size:11pt;font-family:'Calibri';color:#000000">Sales and Marketing</td><td data-path="/Financial Summary/B11" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">5200000</td></tr>
+<tr data-row="0-12"><th class="row-header" data-path="/Financial Summary/row[12]">12</th><td data-path="/Financial Summary/A12" style="font-size:11pt;font-family:'Calibri';color:#000000">General and Administrative</td><td data-path="/Financial Summary/B12" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3100000</td></tr>
+<tr data-row="0-13"><th class="row-header" data-path="/Financial Summary/row[13]">13</th><td data-path="/Financial Summary/A13" style="font-size:11pt;font-family:'Calibri';color:#000000"></td><td data-path="/Financial Summary/B13" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-14"><th class="row-header" data-path="/Financial Summary/row[14]">14</th><td data-path="/Financial Summary/A14" style="font-size:11pt;font-family:'Calibri';color:#000000">Net Income</td><td data-path="/Financial Summary/B14" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">11600000</td></tr>
+<tr data-row="0-15"><th class="row-header" data-path="/Financial Summary/row[15]">15</th><td data-path="/Financial Summary/A15" style="font-size:11pt;font-family:'Calibri';color:#000000">Earnings Per Share</td><td data-path="/Financial Summary/B15" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">2.34</td></tr>
+<tr data-row="0-16"><th class="row-header" data-path="/Financial Summary/row[16]">16</th><td data-path="/Financial Summary/A16" style="font-size:11pt;font-family:'Calibri';color:#000000"></td><td data-path="/Financial Summary/B16" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="0-17"><th class="row-header" data-path="/Financial Summary/row[17]">17</th><td data-path="/Financial Summary/A17" style="font-size:11pt;font-family:'Calibri';color:#000000">Revenue Growth YoY</td><td data-path="/Financial Summary/B17" style="font-size:11pt;font-family:'Calibri';color:#000000">18%</td></tr>
+<tr data-row="0-18"><th class="row-header" data-path="/Financial Summary/row[18]">18</th><td data-path="/Financial Summary/A18" style="font-size:11pt;font-family:'Calibri';color:#000000">Gross Margin</td><td data-path="/Financial Summary/B18" style="font-size:11pt;font-family:'Calibri';color:#000000">59%</td></tr>
+<tr data-row="0-19"><th class="row-header" data-path="/Financial Summary/row[19]">19</th><td data-path="/Financial Summary/A19" style="font-size:11pt;font-family:'Calibri';color:#000000">Net Margin</td><td data-path="/Financial Summary/B19" style="font-size:11pt;font-family:'Calibri';color:#000000">26%</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="1">
+<div class="table-wrapper" style="position:relative">
+<table style="width:207.07pt">
+<caption class="sr-only">Quarterly Results</caption>
+<colgroup><col class="row-header-col"><col style="width:44.27pt"><col style="width:44.27pt"><col style="width:44.27pt"><col style="width:44.27pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Quarterly Results/col[A]">A</th><th class="col-header" data-path="/Quarterly Results/col[B]">B</th><th class="col-header" data-path="/Quarterly Results/col[C]">C</th><th class="col-header" data-path="/Quarterly Results/col[D]">D</th></tr></thead>
+<tbody>
+<tr data-row="1-1"><th class="row-header" data-path="/Quarterly Results/row[1]">1</th><td data-path="/Quarterly Results/A1" style="font-size:11pt;font-family:'Calibri';color:#000000">Quarter</td><td data-path="/Quarterly Results/B1" style="font-size:11pt;font-family:'Calibri';color:#000000">Revenue</td><td data-path="/Quarterly Results/C1" style="font-size:11pt;font-family:'Calibri';color:#000000">Operating Income</td><td data-path="/Quarterly Results/D1" style="font-size:11pt;font-family:'Calibri';color:#000000">Net Income</td></tr>
+<tr data-row="1-2"><th class="row-header" data-path="/Quarterly Results/row[2]">2</th><td data-path="/Quarterly Results/A2" style="font-size:11pt;font-family:'Calibri';color:#000000">Q1 2024</td><td data-path="/Quarterly Results/B2" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">10200000</td><td data-path="/Quarterly Results/C2" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3100000</td><td data-path="/Quarterly Results/D2" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">2500000</td></tr>
+<tr data-row="1-3"><th class="row-header" data-path="/Quarterly Results/row[3]">3</th><td data-path="/Quarterly Results/A3" style="font-size:11pt;font-family:'Calibri';color:#000000">Q2 2024</td><td data-path="/Quarterly Results/B3" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">11400000</td><td data-path="/Quarterly Results/C3" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3600000</td><td data-path="/Quarterly Results/D3" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">2900000</td></tr>
+<tr data-row="1-4"><th class="row-header" data-path="/Quarterly Results/row[4]">4</th><td data-path="/Quarterly Results/A4" style="font-size:11pt;font-family:'Calibri';color:#000000">Q3 2024</td><td data-path="/Quarterly Results/B4" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">11600000</td><td data-path="/Quarterly Results/C4" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3800000</td><td data-path="/Quarterly Results/D4" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3100000</td></tr>
+<tr data-row="1-5"><th class="row-header" data-path="/Quarterly Results/row[5]">5</th><td data-path="/Quarterly Results/A5" style="font-size:11pt;font-family:'Calibri';color:#000000">Q4 2024</td><td data-path="/Quarterly Results/B5" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">12000000</td><td data-path="/Quarterly Results/C5" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">4100000</td><td data-path="/Quarterly Results/D5" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">3100000</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="2">
+<div class="table-wrapper" style="position:relative">
+<table style="width:118.54pt">
+<caption class="sr-only">2025 Forecast</caption>
+<colgroup><col class="row-header-col"><col style="width:44.27pt"><col style="width:44.27pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/2025 Forecast/col[A]">A</th><th class="col-header" data-path="/2025 Forecast/col[B]">B</th></tr></thead>
+<tbody>
+<tr data-row="2-1"><th class="row-header" data-path="/2025 Forecast/row[1]">1</th><td data-path="/2025 Forecast/A1" class="spill" style="font-size:11pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:88.54pt">Revenue Forecast 2025</span></td><td data-path="/2025 Forecast/B1" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="2-2"><th class="row-header" data-path="/2025 Forecast/row[2]">2</th><td data-path="/2025 Forecast/A2" style="font-size:11pt;font-family:'Calibri';color:#000000">Total Revenue</td><td data-path="/2025 Forecast/B2" style="font-size:11pt;font-family:'Calibri';color:#000000;text-align:right">53000000</td></tr>
+<tr data-row="2-3"><th class="row-header" data-path="/2025 Forecast/row[3]">3</th><td data-path="/2025 Forecast/A3" style="font-size:11pt;font-family:'Calibri';color:#000000">Growth Target</td><td data-path="/2025 Forecast/B3" style="font-size:11pt;font-family:'Calibri';color:#000000">17%</td></tr>
+<tr data-row="2-4"><th class="row-header" data-path="/2025 Forecast/row[4]">4</th><td data-path="/2025 Forecast/A4" style="font-size:11pt;font-family:'Calibri';color:#000000"></td><td data-path="/2025 Forecast/B4" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="2-5"><th class="row-header" data-path="/2025 Forecast/row[5]">5</th><td data-path="/2025 Forecast/A5" class="spill" style="font-size:11pt;font-family:'Calibri';color:#000000"><span class="spill-text" style="max-width:88.54pt">Key Initiatives</span></td><td data-path="/2025 Forecast/B5" style="font-size:11pt;font-family:'Calibri';color:#000000"></td></tr>
+<tr data-row="2-6"><th class="row-header" data-path="/2025 Forecast/row[6]">6</th><td data-path="/2025 Forecast/A6" style="font-size:11pt;font-family:'Calibri';color:#000000">Cloud Platform Expansion</td><td data-path="/2025 Forecast/B6" style="font-size:11pt;font-family:'Calibri';color:#000000">High Priority</td></tr>
+<tr data-row="2-7"><th class="row-header" data-path="/2025 Forecast/row[7]">7</th><td data-path="/2025 Forecast/A7" style="font-size:11pt;font-family:'Calibri';color:#000000">Enterprise Sales Growth</td><td data-path="/2025 Forecast/B7" style="font-size:11pt;font-family:'Calibri';color:#000000">High Priority</td></tr>
+<tr data-row="2-8"><th class="row-header" data-path="/2025 Forecast/row[8]">8</th><td data-path="/2025 Forecast/A8" style="font-size:11pt;font-family:'Calibri';color:#000000">International Markets</td><td data-path="/2025 Forecast/B8" style="font-size:11pt;font-family:'Calibri';color:#000000">Medium Priority</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="sheet-tabs" role="tablist">
+  <div class="sheet-tab active" data-sheet="0" role="tab" tabindex="0" onclick="switchSheet(0)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(0)">Financial Summary</div>
+  <div class="sheet-tab" data-sheet="1" role="tab" tabindex="0" onclick="switchSheet(1)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(1)">Quarterly Results</div>
+  <div class="sheet-tab" data-sheet="2" role="tab" tabindex="0" onclick="switchSheet(2)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(2)">2025 Forecast</div>
+</div>
+<script>
+function switchSheet(idx) {
+    document.querySelectorAll('.sheet-tab').forEach(function(t) {
+        t.classList.toggle('active', parseInt(t.getAttribute('data-sheet')) === idx);
+    });
+    document.querySelectorAll('.sheet-content').forEach(function(c) {
+        c.classList.toggle('active', parseInt(c.getAttribute('data-sheet')) === idx);
+    });
+    window.scrollTo(0, 0);
+}
+// Fix frozen row sticky top values using actual rendered heights
+document.querySelectorAll('.table-wrapper table').forEach(function(table) {
+    var thead = table.querySelector('thead');
+    if (!thead) return;
+    var theadH = thead.offsetHeight;
+    var cumTop = theadH;
+    var frozen = table.querySelectorAll('tr[data-frozen]');
+    frozen.forEach(function(tr) {
+        tr.querySelectorAll('th, td').forEach(function(cell) {
+            if (cell.style.position === 'sticky') cell.style.top = cumTop + 'px';
+        });
+        cumTop += tr.offsetHeight;
+    });
+});
+</script>
+</body>
+</html>

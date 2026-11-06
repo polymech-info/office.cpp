@@ -1,0 +1,28 @@
+{
+  "name": "officecli-workspace",
+  "version": "1.0.110",
+  "private": true,
+  "description": "OfficeCLI build wrapper scripts.",
+  "scripts": {
+    "config": "cmake --preset dotnet",
+    "build": "cmake --preset dotnet && cmake --build --preset dotnet",
+    "build:slnx": "cmake --preset dotnet && cmake --build --preset dotnet-slnx",
+    "test": "cmake --preset dotnet && cmake --build --preset dotnet-test",
+    "test:html-theme": "npm run build && cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 node cpp/tests/orchestrator/test-media.mjs --officecli-html-theme-only",
+    "publish": "cmake --preset dotnet && cmake --build --preset dotnet-publish",
+    "clean": "cmake -E rm -rf build",
+    "rebuild": "npm run clean && npm run build",
+    "dotnet:restore": "cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 dotnet restore src/officecli/officecli.csproj",
+    "dotnet:build": "cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 dotnet build src/officecli/officecli.csproj -c Release",
+    "dotnet:slnx": "cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 dotnet build officecli.slnx -c Release",
+    "dotnet:publish": "cmake -E rm -rf build/dotnet/publish-stage && cmake -E make_directory build/dotnet/publish-stage && cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 dotnet publish src/officecli/officecli.csproj -c Release -r win-x64 -o build/dotnet/publish-stage && cmake -E make_directory ../../dist/win-x64/bin && cmake -E copy_directory build/dotnet/publish-stage ../../dist/win-x64/bin",
+    "build:cpp": "cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 npm --prefix cpp run build",
+    "test:cpp-office": "cmake -E env OFFICECLI_NO_NETWORK=1 OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_INSTALL=1 npm --prefix cpp run test:office"
+  },
+  "keywords": [
+    "officecli",
+    "dotnet",
+    "cmake"
+  ],
+  "license": "Apache-2.0"
+}

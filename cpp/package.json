@@ -1,0 +1,31 @@
+{
+  "name": "mono-cpp",
+  "version": "0.1.0",
+  "description": "Minimal C++ CLI boilerplate with CMake.",
+  "scripts": {
+    "config": "cmake --preset dev",
+    "config:release": "cmake --preset release",
+    "config:linux": "cmake --preset release-linux -G Ninja",
+    "config:macos": "cmake --preset release-macos -G Ninja",
+    "build": "cmake --preset dev && cmake --build --preset dev",
+    "build:release": "cmake --preset release && cmake --build --preset release",
+    "build:linux": "cmake --preset release-linux -G Ninja && cmake --build --preset release-linux",
+    "build:macos": "cmake --preset release-macos -G Ninja && cmake --build --preset release-macos",
+    "build:win32-mini": "cd apps/win32-mini && cmake --preset win32-mini && cmake --build --preset win32-mini",
+    "clean": "cmake -E rm -rf build dist",
+    "clean:all": "npm run clean && rm -rf $HOME/.mono-cpp-fetchcontent",
+    "rebuild": "npm run clean && npm run build",
+    "rebuild:release": "npm run clean && npm run build:release",
+    "rebuild:macos": "npm run clean && npm run build:macos",
+    "rebuild:linux": "npm run clean && npm run build:linux",
+    "run": "./dist/mono-cpp --help",
+    "run:hello": "./dist/mono-cpp hello",
+    "test": "./dist/mono-cpp hello",
+    "test:office": "node tests/orchestrator/test-media.mjs --office-smoke-only",
+    "install:linux": "bash scripts/install-lnx.sh",
+    "install:macos": "bash osx/install.sh"
+  },
+  "keywords": ["cpp", "cmake", "cli", "boilerplate"],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,8 @@
+[project]
+name = "mono-cpp"
+version = "0.1.0"
+description = "Minimal C++ CLI Boilerplate"
+
+[settings]
+debug = true
+log_level = "info"

@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja-JP" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>meeting-notes.docx</title>
+<style>
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f0f0f0; font-family: 'Cambria', 'ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic', -apple-system, sans-serif; color: #000000; padding: 20px; }
+        .page-wrapper { margin: 0 auto 40px; transition: width 0.15s ease, height 0.15s ease; }
+        .page { background: white; margin: 0 auto; padding: 72pt 90pt 72pt 90pt;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px;
+            min-height: 792pt; line-height: 1.15; font-size: 11pt; position: relative; overflow-x: auto;
+            display: flex; flex-direction: column; font-kerning: none; letter-spacing: 0;
+            transform-origin: left top; transition: transform 0.15s ease;
+            }
+        .page-body { flex: 1; display: flex; flex-direction: column; text-autospace: ideograph-alpha ideograph-numeric; overflow-wrap: anywhere;  }
+        /* Multi-column sections: flex ignores column-count; switch to block. */
+        .page-body[style*="column-count"] { display: block; }
+        /* Continuation page-bodies (created by pagination JS when content
+           overflows): the segment leader was already at its computed offset
+           in the source body, so its server-rendered margin-top must be
+           zeroed when it becomes :first-child of a new page-body. The
+           ORIGINAL page-body (which holds the document's first paragraph)
+           is intentionally not matched here, so its first-paragraph
+           spaceBefore renders the way Word emits it. */
+        .page-body-cont > :first-child { margin-top: 0 !important; }
+        .page-body > img + h1, .page-body > img + img + h1 { margin-top: 0 !important; }
+        .doc-header, .doc-footer { font-size: 11pt; }
+        .doc-header { position: absolute; top: 36pt; left: 90pt; right: 90pt;
+            padding-bottom: 0.3em; }
+        .doc-footer { position: absolute; bottom: 36pt; left: 90pt; right: 90pt;
+            padding-top: 0.3em; }
+        h1, h2, h3, h4, h5, h6 { line-height: 1.3482; }
+        p { margin: 0; margin-bottom: 10pt; line-height: 1.3482; text-align: left; text-autospace: ideograph-alpha ideograph-numeric; }
+        a { color: #2B579A; } a:hover { color: #1a3c6e; }
+        .toc { display: flex; text-indent: 0 !important; }
+        .toc a { color: inherit; text-decoration: none; display: flex; flex: 1; }
+        .toc a span { color: inherit !important; text-decoration: none !important; }
+        .dot-leader { flex: 1; border-bottom: 1px dotted #000; margin: 0 4px; min-width: 2em; align-self: flex-end; margin-bottom: 0.25em; }
+        .hyphen-leader { flex: 1; border-bottom: 1px dashed #000; margin: 0 4px; min-width: 2em; align-self: flex-end; margin-bottom: 0.25em; }
+        .underscore-leader { flex: 1; border-bottom: 1px solid #000; margin: 0 4px; min-width: 2em; align-self: flex-end; margin-bottom: 0.25em; }
+        .middledot-leader { flex: 1; border-bottom: 2px dotted #555; margin: 0 4px; min-width: 2em; align-self: flex-end; margin-bottom: 0.25em; }
+        /* CONSISTENCY(run-special-content): w:ptab anchors header/footer
+           left/center/right alignment regions. The paragraph carrying
+           ptabs becomes a flex container so .ptab-spacer (and the leader
+           variants above) can flex-grow to push siblings apart. */
+        p.has-ptab, div.has-ptab { display: flex; align-items: baseline; flex-wrap: wrap; }
+        /* TOC-style <w:tab> paragraphs (center/right tab + dot leader): need a
+           flex container so the .dot-leader span (flex:1) stretches and the
+           trailing page-number segment lands at the right edge. */
+        p.has-leader-tab, div.has-leader-tab { display: flex; align-items: baseline; }
+        .ptab-spacer { flex: 1; min-width: 1em; }
+        ul, ol { padding-left: 2em; margin: 0; }
+        ul { list-style-type: disc; }
+        li { margin: 0; }
+        /* OOXML §17.3.1.36 dropCap: the framed <p> hosts a float clipped
+           to the visible cap-glyph height; the inner run <span>'s own
+           line-height must defer so its natural strut doesn't expand
+           the float past that clip. */
+        .dropcap-wrap > p:first-child > span { line-height: inherit !important; }
+        .equation { text-align: center; padding: 0.5em 0; overflow-x: auto; }
+        img { max-width: 100%; height: auto; }
+        .img-error { color: #999; font-style: italic; }
+        table { border-collapse: collapse; font-size: 11pt; }
+        td.tsf span, td.tsf div { font-size: inherit !important; color: inherit !important; text-align: inherit !important; }
+        .wg { margin: 0.3em 0; }
+        .wg p { padding: 0; margin: 0.05em 0; }
+        table.borderless { border: none; }
+        table.borderless td, table.borderless th { border: none; padding: 2px 6px; }
+        /* Default tcMar: Word's TableNormal style is top=0 left=108 bottom=0
+           right=108 (twips), so 0pt T/B and 5.4pt L/R. Per-cell tcMar (read
+           from tcPr/tcMar) overrides this via inline style. */
+        th, td { border: none; padding: 0 5.4pt; text-align: inherit; vertical-align: top; break-inside: auto; }
+        tr { break-inside: auto; }
+        th { font-weight: 600; }
+        @media print { body { background: white; padding: 0; }
+            .page { box-shadow: none; margin: 0; max-width: none; transform: none !important; }
+            hr.page-break { page-break-after: always; border: none; margin: 0; } }
+:root,
+[data-theme="light"] {
+  --office-preview-bg: #ffffff;
+  --office-preview-text: #111827;
+  --office-preview-muted: #6b7280;
+  --office-preview-surface: #f8fafc;
+  --office-preview-surface-2: #f3f4f6;
+  --office-preview-border: #d0d7de;
+  --office-preview-selection: rgba(37, 99, 235, 0.16);
+}
+
+[data-theme="dark"] {
+  --office-preview-bg: #0f172a;
+  --office-preview-text: #e5e7eb;
+  --office-preview-muted: #94a3b8;
+  --office-preview-surface: #111827;
+  --office-preview-surface-2: #1e293b;
+  --office-preview-border: #334155;
+  --office-preview-selection: rgba(96, 165, 250, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --office-preview-bg: #0f172a;
+    --office-preview-text: #e5e7eb;
+    --office-preview-muted: #94a3b8;
+    --office-preview-surface: #111827;
+    --office-preview-surface-2: #1e293b;
+    --office-preview-border: #334155;
+    --office-preview-selection: rgba(96, 165, 250, 0.22);
+  }
+}
+
+body {
+  background: var(--office-preview-bg);
+  color: var(--office-preview-text);
+}
+</style>
+<style>
+li.marker-1-0 { list-style-type: ' '; }
+li.marker-1-0::marker { font-family:'Symbol' }
+
+</style>
+<style>
+@font-face { font-family: 'Courier'; src: local('Courier'); }
+@font-face { font-family: 'Courier'; font-weight: bold; src: local('Courier Bold'); }
+@font-face { font-family: 'Courier'; font-style: italic; src: local('Courier Italic'); }
+@font-face { font-family: 'Courier'; font-weight: bold; font-style: italic; src: local('Courier Bold Italic'); }
+@font-face { font-family: 'Calibri'; src: local('Calibri'); ascent-override: 75%; descent-override: 25%; line-gap-override: 0%; }
+@font-face { font-family: 'Calibri'; font-weight: bold; src: local('Calibri Bold'); ascent-override: 75%; descent-override: 25%; line-gap-override: 0%; }
+@font-face { font-family: 'Calibri'; font-style: italic; src: local('Calibri Italic'); ascent-override: 75%; descent-override: 25%; line-gap-override: 0%; }
+@font-face { font-family: 'Calibri'; font-weight: bold; font-style: italic; src: local('Calibri Bold Italic'); ascent-override: 75%; descent-override: 25%; line-gap-override: 0%; }
+@font-face { font-family: 'Cambria'; src: local('Cambria'); ascent-override: 95.02%; descent-override: 22.22%; line-gap-override: 0%; }
+@font-face { font-family: 'Cambria'; font-weight: bold; src: local('Cambria Bold'); ascent-override: 95.02%; descent-override: 22.22%; line-gap-override: 0%; }
+@font-face { font-family: 'Cambria'; font-style: italic; src: local('Cambria Italic'); ascent-override: 95.02%; descent-override: 22.22%; line-gap-override: 0%; }
+@font-face { font-family: 'Cambria'; font-weight: bold; font-style: italic; src: local('Cambria Bold Italic'); ascent-override: 95.02%; descent-override: 22.22%; line-gap-override: 0%; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier:ital,wght@0,400;0,700;1,400;1,700&family=Calibri:ital,wght@0,400;0,700;1,400;1,700&family=Cambria:ital,wght@0,400;0,700;1,400;1,700&display=swap" media="print" onload="this.media='all'" onerror="this.remove()">
+</head>
+<body>
+<div class="page-wrapper" data-section="1" data-section-idx="0">
+<div class="page" data-page="1" style="width:612pt;min-height:792pt;padding:72pt 90pt 72pt 90pt">
+<div class="page-body"><a id="w-p-1"></a><span class="wb" data-block="1" style="display:none"></span><h1 data-path="/body/p[1]" style="font-size:26pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:0;margin-bottom:15pt;line-height:1.2207;border-bottom:1pt solid #4F81BD;padding-bottom:4pt;font-weight:normal"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:26pt;letter-spacing:0.25pt;color:#17365D;line-height:1">Meeting Notes — Product Roadmap</span></h1>
+<a id="w-p-2"></a><span class="we" data-block="1" style="display:none"></span><span class="wb" data-block="2" style="display:none"></span><p data-path="/body/p[2]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">Date: June 15, 2024</span></p>
+<a id="w-p-3"></a><span class="we" data-block="2" style="display:none"></span><span class="wb" data-block="3" style="display:none"></span><p data-path="/body/p[3]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">Attendees: Alice Chen (PM), Bob Smith (Engineering), Carol Lee (Design), David Park (Sales)</span></p>
+<a id="w-p-4"></a><span class="we" data-block="3" style="display:none"></span><span class="wb" data-block="4" style="display:none"></span><p data-path="/body/p[4]" style="margin-bottom:10pt;line-height:1.3482">&nbsp;</p>
+<a id="w-p-5"></a><span class="we" data-block="4" style="display:none"></span><span class="wb" data-block="5" style="display:none"></span><h1 data-path="/body/p[5]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Agenda</span></h1>
+<a id="w-p-6"></a><span class="we" data-block="5" style="display:none"></span><span class="wb" data-block="6" style="display:none"></span><p data-path="/body/p[6]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">1. Q3 roadmap review</span></p>
+<a id="w-p-7"></a><span class="we" data-block="6" style="display:none"></span><span class="wb" data-block="7" style="display:none"></span><p data-path="/body/p[7]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">2. Customer feedback summary</span></p>
+<a id="w-p-8"></a><span class="we" data-block="7" style="display:none"></span><span class="wb" data-block="8" style="display:none"></span><p data-path="/body/p[8]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">3. Resource allocation</span></p>
+<a id="w-p-9"></a><span class="we" data-block="8" style="display:none"></span><span class="wb" data-block="9" style="display:none"></span><p data-path="/body/p[9]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">4. Action items</span></p>
+<a id="w-p-10"></a><span class="we" data-block="9" style="display:none"></span><span class="wb" data-block="10" style="display:none"></span><h1 data-path="/body/p[10]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Q3 Roadmap Review</span></h1>
+<a id="w-p-11"></a><span class="we" data-block="10" style="display:none"></span><span class="wb" data-block="11" style="display:none"></span><p data-path="/body/p[11]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">The team reviewed the Q3 roadmap priorities. The vector search feature has been deprioritized in favor of the enterprise SSO integration, which unblocks three large customer accounts. Alice confirmed the deadline remains end of August.</span></p>
+<a id="w-p-12"></a><span class="we" data-block="11" style="display:none"></span><span class="wb" data-block="12" style="display:none"></span><p data-path="/body/p[12]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">Key decisions made during this meeting:</span></p>
+<a id="w-p-13"></a><span class="we" data-block="12" style="display:none"></span><span class="wb" data-block="13" style="display:none"></span><ul style="padding-left:18pt;margin:0;list-style-image:none;list-style-type:disc">
+<li data-path="/body/p[13]" class="marker-1-0" style="font-size:11pt;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Enterprise SSO integration moved to P0 priority</span><a id="w-p-14"></a></li>
+<li data-path="/body/p[14]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Vector search feature deferred to Q4</span><a id="w-p-15"></a></li>
+<li data-path="/body/p[15]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:10pt;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Mobile app redesign timeline extended by 2 weeks</span><a id="w-p-16"></a><span class="we" data-block="13" style="display:none"></span><span class="wb" data-block="14" style="display:none"></span></li>
+</ul>
+<h1 data-path="/body/p[16]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Customer Feedback Summary</span></h1>
+<a id="w-p-17"></a><span class="we" data-block="14" style="display:none"></span><span class="wb" data-block="15" style="display:none"></span><p data-path="/body/p[17]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">David shared findings from the last 10 enterprise customer interviews. The most common themes were:</span></p>
+<a id="w-p-18"></a><span class="we" data-block="15" style="display:none"></span><span class="wb" data-block="16" style="display:none"></span><ul style="padding-left:18pt;margin:0;list-style-image:none;list-style-type:disc">
+<li data-path="/body/p[18]" class="marker-1-0" style="font-size:11pt;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Slow document processing for large files (&gt; 50 MB)</span><a id="w-p-19"></a></li>
+<li data-path="/body/p[19]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Missing integration with SharePoint and OneDrive</span><a id="w-p-20"></a></li>
+<li data-path="/body/p[20]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:10pt;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Request for batch processing API</span><a id="w-p-21"></a><span class="we" data-block="16" style="display:none"></span><span class="wb" data-block="17" style="display:none"></span></li>
+</ul>
+<p data-path="/body/p[21]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">Carol noted that the UX research revealed users frequently miss the advanced search panel. Proposed solution: move the filter controls to a persistent sidebar.</span></p>
+<a id="w-p-22"></a><span class="we" data-block="17" style="display:none"></span><span class="wb" data-block="18" style="display:none"></span><h1 data-path="/body/p[22]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Resource Allocation</span></h1>
+<a id="w-p-23"></a><span class="we" data-block="18" style="display:none"></span><span class="wb" data-block="19" style="display:none"></span><p data-path="/body/p[23]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">Bob confirmed that two senior engineers will be reassigned from the analytics module to the SSO integration project starting next sprint. This impacts the analytics dashboard delivery, pushing it from Q3 to Q4.</span></p>
+<a id="w-p-24"></a><span class="we" data-block="19" style="display:none"></span><span class="wb" data-block="20" style="display:none"></span><h1 data-path="/body/p[24]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Action Items</span></h1>
+<a id="w-p-25"></a><span class="we" data-block="20" style="display:none"></span><span class="wb" data-block="21" style="display:none"></span><ul style="padding-left:18pt;margin:0;list-style-image:none;list-style-type:disc">
+<li data-path="/body/p[25]" class="marker-1-0" style="font-size:11pt;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Alice: Update roadmap doc and share with stakeholders by Friday</span><a id="w-p-26"></a></li>
+<li data-path="/body/p[26]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Bob: Create technical spec for SSO integration by June 20</span><a id="w-p-27"></a></li>
+<li data-path="/body/p[27]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:0;line-height:16.03pt"><span style="font-size:11pt;line-height:1">Carol: Prototype persistent filter sidebar for user testing</span><a id="w-p-28"></a></li>
+<li data-path="/body/p[28]" class="marker-1-0" style="font-size:11pt;margin-top:0;margin-bottom:10pt;line-height:16.03pt"><span style="font-size:11pt;line-height:1">David: Compile top 5 customer pain points into a one-pager</span><a id="w-p-29"></a><span class="we" data-block="21" style="display:none"></span><span class="wb" data-block="22" style="display:none"></span></li>
+</ul>
+<h1 data-path="/body/p[29]" style="font-size:14pt;font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;margin-top:14pt;margin-bottom:0pt;line-height:1.4038"><span style="font-family:'Calibri','ＭＳ 明朝', 'Hiragino Sans', 'Hiragino Mincho ProN', 'Yu Gothic', 'Yu Mincho', 'Noto Sans CJK JP', 'MS Gothic',sans-serif;font-size:14pt;font-weight:bold;color:#365F91;line-height:1">Next Meeting</span></h1>
+<a id="w-p-30"></a><span class="we" data-block="22" style="display:none"></span><span class="wb" data-block="23" style="display:none"></span><p data-path="/body/p[30]" style="font-size:11pt;margin-bottom:10pt;line-height:1.3482"><span style="font-size:11pt;line-height:1">June 29, 2024 — Sprint review and roadmap checkpoint</span></p>
+<span class="we" data-block="23" style="display:none"></span></div></div>
+</div>
+<script>
+function _wordInit(){
+  if(typeof katex!=='undefined'){
+    document.querySelectorAll('.katex-formula:not(.katex-rendered)').forEach(function(el){
+      try{katex.render(el.dataset.formula,el,{throwOnError:false,displayMode:!!el.dataset.display});}catch(e){el.textContent=el.dataset.formula+' (Error: '+e.message+'. See https://katex.org/docs/supported.html for supported syntax.)';}
+      el.classList.add('katex-rendered');
+    });
+  }else{
+    document.querySelectorAll('.katex-formula:not(.katex-rendered)').forEach(function(el){el.textContent=el.dataset.formula;el.style.fontFamily='monospace';el.style.color='#666';});
+  }
+  (function(){
+  var re=/([\u3000-\u303F\uFF01-\uFF60\uFE30-\uFE4F\u2014\u2015\u2026\u2018\u2019\u201C\u201D])/;
+  document.querySelectorAll('.page-body').forEach(function(body){
+    var w=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+    var nodes=[];while(w.nextNode())nodes.push(w.currentNode);
+    nodes.forEach(function(nd){
+      if(!re.test(nd.textContent))return;
+      var parts=nd.textContent.split(re);
+      if(parts.length<=1)return;
+      var frag=document.createDocumentFragment();
+      for(var i=0;i<parts.length;i++){
+        if(!parts[i])continue;
+        if(re.test(parts[i])){
+          var sp=document.createElement('span');
+          sp.textContent=parts[i];
+          sp.style.marginRight='-0.2em';
+          frag.appendChild(sp);
+        }else frag.appendChild(document.createTextNode(parts[i]));
+      }
+      nd.parentNode.replaceChild(frag,nd);
+    });
+  });
+  })();
+  var maxBodyH=648*96/72;
+  var ftpl="";
+  var htpl="";
+  var etpl="";
+  var eftpl="";
+  function pickHtpl(n){return (etpl&&n%2===0)?etpl:htpl;}
+  function pickFtpl(n){return (eftpl&&n%2===0)?eftpl:ftpl;}
+
+  function paginate(){
+    var pages=document.querySelectorAll('.page');
+    // Sync mode + page filter: bail once pages beyond max-requested exist
+    // and pages 1..maxReq are stable. Avoids paginating 100-page docs to
+    // completion when only the first few were asked for.
+    var loopLim=pages.length;
+    if(window._wpSync&&window._requestedPages&&window._requestedPages.length){
+      var mxR=Math.max.apply(null,window._requestedPages);
+      loopLim=Math.min(pages.length,mxR+1);
+      if(pages.length>mxR){
+        var settled=true;
+        for(var sk=0;sk<mxR;sk++){
+          var sp=pages[sk];var sb_=sp.querySelector('.page-body');
+          if(!sb_)continue;
+          var sf=sb_.querySelector('.footnotes');var sfH=sf?sf.offsetHeight:0;
+          var sch=0;
+          Array.from(sb_.children).forEach(function(c){
+            if(c.classList.contains('footnotes'))return;
+            var bt=c.offsetTop+c.offsetHeight-sb_.offsetTop;
+            if(bt>sch)sch=bt;
+          });
+          if(sch>maxBodyH-sfH+2){settled=false;break;}
+        }
+        if(settled){positionFootnotes();wrapFloats();applyLineNumbers();applyPageFilter();return;}
+      }
+    }
+    for(var pi=0;pi<loopLim;pi++){
+      var page=pages[pi];
+      var body=page.querySelector('.page-body');
+      if(!body)continue;
+      // Reserve space for footnotes at page bottom (like Word does)
+      var fnEl=body.querySelector('.footnotes');
+      var fnH=fnEl?fnEl.offsetHeight:0;
+      var availH=maxBodyH-fnH;
+      // Check if content (excluding footnotes) exceeds available space
+      var contentH=0;
+      Array.from(body.children).forEach(function(c){
+        if(c.classList.contains('footnotes'))return;
+        var b=c.offsetTop+c.offsetHeight-body.offsetTop;
+        if(b>contentH)contentH=b;
+      });
+      if(contentH<=availH+2)continue;
+      // Find first child that overflows available space. Use the same +2px
+      // tolerance the outer check uses — Chrome rounds line-box height to
+      // logical pixels at dsf>=2, accumulating ~0.13pt/line of drift, so
+      // a paragraph straddling the boundary by <2px shouldn't get pushed
+      // to the next page when the outer overflow check already accepted
+      // the page.
+      var children=Array.from(body.children);
+      var splitIdx=-1;
+      for(var ci=0;ci<children.length;ci++){
+        if(children[ci].classList.contains('footnotes'))continue;
+        var bot=children[ci].offsetTop+children[ci].offsetHeight-body.offsetTop;
+        if(bot>availH+2){splitIdx=ci;break;}
+      }
+      if(splitIdx<0)continue;
+      // #7b00: when the overflowing child is a <table>, split it at the
+      // row boundary and clone any rows carrying data-tbl-header="1"
+      // onto the continuation so long tables have repeating headers
+      // across pages the way Word renders them.
+      var firstOverflow=children[splitIdx];
+      if(firstOverflow&&firstOverflow.tagName==='TABLE'){
+        var table=firstOverflow;
+        var tableTop=table.offsetTop-body.offsetTop;
+        // Only top-level rows — querySelectorAll('tr') would also pick up
+        // nested subtable rows and mangle nested structures on page splits.
+        var trs=Array.from(table.querySelectorAll('tr')).filter(function(tr){
+          return tr.closest('table')===table;
+        });
+        var hdrRows=trs.filter(function(tr){return tr.getAttribute('data-tbl-header')==='1';});
+        // Find first row whose bottom exceeds availH (relative to body).
+        var rowSplit=-1;
+        for(var ri=0;ri<trs.length;ri++){
+          if(trs[ri].getAttribute('data-tbl-header')==='1')continue;
+          var rowBot=trs[ri].offsetTop+trs[ri].offsetHeight-body.offsetTop;
+          if(rowBot>availH){rowSplit=ri;break;}
+        }
+        if(rowSplit>0){
+          // Build continuation table; clone attributes + header rows.
+          var cont=table.cloneNode(false);
+          var tbodies=table.querySelectorAll('tbody');
+          var contBody=tbodies.length?document.createElement('tbody'):cont;
+          if(tbodies.length)cont.appendChild(contBody);
+          hdrRows.forEach(function(h){contBody.appendChild(h.cloneNode(true));});
+          for(var rj=rowSplit;rj<trs.length;rj++){
+            if(trs[rj].getAttribute('data-tbl-header')==='1')continue;
+            contBody.appendChild(trs[rj]);
+          }
+          // Insert continuation as new sibling after the source table so
+          // the split-point logic below moves it to a new page.
+          table.parentNode.insertBefore(cont,table.nextSibling);
+          children=Array.from(body.children);
+          splitIdx=children.indexOf(cont);
+        }
+      }
+      // Mirror the table case for <ol>/<ul>: split at the first <li>
+      // that overflows so partial lists carry to the next page rather
+      // than the whole list moving as one atomic unit. Multi-level
+      // numbering is rendered via nested <ol>/<ul> wrapped inside the
+      // parent <li>; recurse through that nesting to find the
+      // shallowest list whose splitting keeps as much content on this
+      // page as possible. Cumulative left-padding from the parent
+      // chain is folded into the promoted continuation list so the
+      // continuation keeps its visual indent on the new page.
+      if(firstOverflow&&(firstOverflow.tagName==='OL'||firstOverflow.tagName==='UL')){
+        var findListSplit=function(lst,parents){
+          var lis=Array.from(lst.children).filter(function(c){return c.tagName==='LI';});
+          for(var li=0;li<lis.length;li++){
+            var liBot=lis[li].offsetTop+lis[li].offsetHeight-body.offsetTop;
+            if(liBot>availH+2){
+              if(li>0)return {parents:parents,list:lst,splitAt:li,moveAll:false};
+              var nested=Array.from(lis[li].children).find(function(c){return c.tagName==='OL'||c.tagName==='UL';});
+              if(nested){
+                var nestedTop=nested.offsetTop-body.offsetTop;
+                if(nestedTop<=availH+2){
+                  var newParents=parents.concat([{list:lst,li:lis[li]}]);
+                  var inner=findListSplit(nested,newParents);
+                  if(inner)return inner;
+                  return {parents:newParents,list:nested,splitAt:0,moveAll:true};
+                }
+              }
+              return null;
+            }
+          }
+          return null;
+        };
+        var sp=findListSplit(firstOverflow,[]);
+        if(sp){
+          var srcLis=Array.from(sp.list.children).filter(function(c){return c.tagName==='LI';});
+          var cont=sp.list.cloneNode(false);
+          for(var lj=sp.splitAt;lj<srcLis.length;lj++){
+            cont.appendChild(srcLis[lj]);
+          }
+          // Promote `cont` to a body-level sibling. Each parent <li>
+          // would have contributed its own list's padding-left, so
+          // sum the live padding-left of every list in the parent
+          // chain (plus the split list itself) and apply that to the
+          // promoted wrapper. Reading getComputedStyle keeps us in
+          // sync with whatever the renderer emits per-level — no
+          // assumed indent constant.
+          if(sp.parents.length>0){
+            var cumPadPx=0;
+            for(var pi2=0;pi2<sp.parents.length;pi2++){
+              cumPadPx+=parseFloat(getComputedStyle(sp.parents[pi2].list).paddingLeft)||0;
+            }
+            cumPadPx+=parseFloat(getComputedStyle(sp.list).paddingLeft)||0;
+            cont.style.paddingLeft=cumPadPx+'px';
+            // If the split list is now empty (moveAll case), drop it
+            // so the source page doesn't render an empty bullet gutter.
+            if(sp.moveAll&&sp.list.children.length===0){
+              sp.list.parentNode.removeChild(sp.list);
+            }
+          }
+          firstOverflow.parentNode.insertBefore(cont,firstOverflow.nextSibling);
+          children=Array.from(body.children);
+          splitIdx=children.indexOf(cont);
+        }
+      }
+      // When the first child itself exceeds page height, keep it on this
+      // page and split after, so the oversized element is not silently
+      // dropped by being moved to a new (still-oversized) page.
+      if(splitIdx===0)splitIdx=1;
+      // Sync mode: greedy multi-split — walk children once, find ALL break
+      // points based on cumulative offsetTop/Height, and create N new pages
+      // in a single pass. Avoids the O(N) layout reflows the async path
+      // pays via recursive single-splits. Async path retains the original
+      // single-split behaviour (setTimeout chain stays cheap).
+      if(window._wpSync){
+        // table-row-split above may have refreshed children — re-collect.
+        children=Array.from(body.children);
+        var bodyT=body.offsetTop;
+        var movable=[];
+        for(var mi=splitIdx;mi<children.length;mi++){
+          if(children[mi].classList.contains('footnotes'))continue;
+          movable.push({el:children[mi],top:children[mi].offsetTop-bodyT,h:children[mi].offsetHeight});
+        }
+        if(movable.length===0)continue;
+        // Greedy bin-pack: each segment-leading element becomes :first-child
+        // of its new page-body. New bodies get class=page-body-cont so the
+        // CSS rule
+        //   .page-body-cont > :first-child { margin-top: 0 !important; }
+        // zeroes the leader's margin-top contribution. (The original page-body
+        // is class=page-body without -cont, so its first paragraph keeps its
+        // server-rendered spaceBefore — matching Word.) Since the leader's
+        // old offsetTop already absorbs its own margin-top (it wasn't
+        // first-child of source body), and inter-sibling distances are
+        // preserved across the move
+        // (flex items don't collapse), bot-segStartTop with
+        // segStartTop=leader.oldTop directly equals the leader's newBottom in
+        // the new page-body. No margin-top shift needed.
+        var splits=[0];
+        var segStartTop=movable[0].top;
+        for(var i=1;i<movable.length;i++){
+          var bot=movable[i].top+movable[i].h;
+          if(bot-segStartTop>availH+2){
+            splits.push(i);
+            segStartTop=movable[i].top;
+          }
+        }
+        // splits = [0, k1, k2, ...]: segment s holds movable[splits[s]..splits[s+1]-1]
+        var prevWrapper=page.closest('.page-wrapper')||page;
+        for(var s=0;s<splits.length;s++){
+          var segStart=splits[s];
+          var segEnd=s+1<splits.length?splits[s+1]:movable.length;
+          var nw=document.createElement('div');
+          nw.className='page-wrapper';
+          var np=document.createElement('div');
+          np.className='page';
+          np.style.cssText=page.style.cssText;
+          var nb=document.createElement('div');
+          nb.className='page-body page-body-cont';
+          for(var mi=segStart;mi<segEnd;mi++){
+            nb.appendChild(movable[mi].el);
+          }
+          var _hT=pickHtpl(pi+s+2);
+          if(_hT){
+            var nh=document.createElement('div');
+            nh.innerHTML=_hT.replace('<!--PAGE_NUM-->',(pi+s+2).toString());
+            if(nh.firstChild)np.appendChild(nh.firstChild);
+          }
+          np.appendChild(nb);
+          var nf=document.createElement('div');
+          nf.innerHTML=pickFtpl(pi+s+2).replace('<!--PAGE_NUM-->',(pi+s+2).toString());
+          if(nf.firstChild)np.appendChild(nf.firstChild);
+          nw.appendChild(np);
+          prevWrapper.after(nw);
+          prevWrapper=nw;
+        }
+      }
+      else{
+        // Async path: single split per iter (setTimeout-driven, layout cost
+        // amortized across event loop turns).
+        var toMove=[];
+        for(var mi=splitIdx;mi<children.length;mi++){
+          if(!children[mi].classList.contains('footnotes'))toMove.push(children[mi]);
+        }
+        if(toMove.length===0)continue;
+        var nw=document.createElement('div');
+        nw.className='page-wrapper';
+        var np=document.createElement('div');
+        np.className='page';
+        np.style.cssText=page.style.cssText;
+        var nb=document.createElement('div');
+        nb.className='page-body page-body-cont';
+        for(var mi=0;mi<toMove.length;mi++){
+          nb.appendChild(toMove[mi]);
+        }
+        var _hT=pickHtpl(pi+2);
+        if(_hT){
+          var nh=document.createElement('div');
+          nh.innerHTML=_hT.replace('<!--PAGE_NUM-->',(pi+2).toString());
+          if(nh.firstChild)np.appendChild(nh.firstChild);
+        }
+        np.appendChild(nb);
+        var nf=document.createElement('div');
+        nf.innerHTML=pickFtpl(pi+2).replace('<!--PAGE_NUM-->',(pi+2).toString());
+        if(nf.firstChild)np.appendChild(nf.firstChild);
+        nw.appendChild(np);
+        var parentWrapper=page.closest('.page-wrapper');
+        if(parentWrapper)parentWrapper.after(nw);
+        else page.after(nw);
+      }
+    }
+    // Renumber pages
+    var allPages=document.querySelectorAll('.page');
+    allPages.forEach(function(p,i){
+      var nums=p.querySelectorAll('.page-num');
+      nums.forEach(function(n){n.textContent=(i+1);});
+      // Only touch explicit PAGE/NUMPAGES sentinel spans — scanning every
+      // digit-only leaf silently rewrote years, prices, chapter ids etc.
+      p.querySelectorAll('.page-num-field').forEach(function(s){s.textContent=(i+1);});
+      p.querySelectorAll('.num-pages-field').forEach(function(s){s.textContent=allPages.length;});
+    });
+    // Recurse in case new pages also overflow. A page is only eligible for
+    // another split when it has more than one visible child — otherwise the
+    // single element is irreducible and we would recurse forever.
+    var again=false;
+    var rcAll=document.querySelectorAll('.page');
+    var rcLim=rcAll.length;
+    if(window._wpSync&&window._requestedPages&&window._requestedPages.length){
+      rcLim=Math.min(rcAll.length,Math.max.apply(null,window._requestedPages)+1);
+    }
+    for(var rci=0;rci<rcLim;rci++){
+      var p=rcAll[rci];
+      var b=p.querySelector('.page-body');
+      if(!b)continue;
+      var f=b.querySelector('.footnotes');
+      var fh=f?f.offsetHeight:0;
+      var ch=0;
+      var visibleCount=0;
+      Array.from(b.children).forEach(function(c){
+        if(c.classList.contains('footnotes'))return;
+        var bt=c.offsetTop+c.offsetHeight-b.offsetTop;
+        if(bt>ch)ch=bt;
+        if(c.offsetHeight>0)visibleCount++;
+      });
+      if(ch>maxBodyH-fh+2 && visibleCount>1){again=true;break;}
+    }
+    if(again){if(window._wpSync)paginate();else setTimeout(paginate,0);}
+    else if(window._wpSync){
+      positionFootnotes();wrapFloats();applyLineNumbers();
+      // Build heading→page map BEFORE applyPageFilter (it sets display:none).
+      var pgs=Array.from(document.querySelectorAll('.page'));
+      var pmap=[];
+      document.querySelectorAll('a[id^="_Toc"]').forEach(function(a){
+        for(var i=0;i<pgs.length;i++) if(pgs[i].contains(a)){pmap.push(a.id+'='+(i+1));break;}
+      });
+      applyPageFilter();
+      document.title='PAGES:'+pgs.length+(pmap.length?'|MAP:'+pmap.join(','):'');
+    }
+    else{setTimeout(positionFootnotes,0);setTimeout(wrapFloats,0);setTimeout(applyLineNumbers,0);setTimeout(applyPageFilter,0);setTimeout(function(){scalePages(false);},0);}
+  }
+  // #2 / #7b light approximation: a floating table whose CSS has float:*
+  // sits directly under .page-body (flex column) and has its float ignored.
+  // Wrap it + following prose siblings in a non-flex BFC div until either
+  // a heading, another table, or the wrap is tall enough for prose to
+  // have cleared the table. Re-run is idempotent.
+  function wrapFloats(){
+    // Collect direct page-body children whose outer CSS or whose first
+    // child <img> has float:*. Both cases need a BFC wrapper so the float
+    // can push following prose sideways.
+    var candidates=[];
+    document.querySelectorAll('.page-body > *').forEach(function(el){
+      if(el.parentElement && el.parentElement.classList.contains('float-wrap'))return;
+      var ownFloat=(el.style&&el.style.cssFloat)||'';
+      if(!ownFloat && el.getAttribute){
+        var st=el.getAttribute('style')||'';
+        if(/float\s*:\s*(left|right)/.test(st))ownFloat='y';
+      }
+      var innerImg=el.querySelector&&el.querySelector('img[style*="float:"]');
+      if(ownFloat||innerImg)candidates.push({el:el,anchor:innerImg||el});
+    });
+    candidates.forEach(function(c){
+      var wrap=document.createElement('div');
+      wrap.className='float-wrap';
+      wrap.style.cssText='display:block;overflow:auto';
+      c.el.parentNode.insertBefore(wrap,c.el);
+      wrap.appendChild(c.el);
+      var anchorH=c.anchor.offsetHeight||c.el.offsetHeight;
+      // Absorb following siblings until a hard break or clearance.
+      for(var guard=0;guard<50;guard++){
+        var nxt=wrap.nextSibling;
+        if(!nxt)break;
+        if(nxt.nodeType===1){
+          var tag=nxt.tagName;
+          if(tag==='TABLE'||(tag&&tag.length===2&&tag[0]==='H'))break;
+          if(nxt.classList&&nxt.classList.contains('footnotes'))break;
+        }
+        wrap.appendChild(nxt);
+        if(wrap.offsetHeight>anchorH+16)break;
+      }
+    });
+  }
+  // #1: walk each page's text nodes, use Range.getClientRects() to find
+  // visual line rectangles, and inject absolute-positioned <span> markers
+  // in the left margin. Honors countBy (show every Nth line), start
+  // (initial number), distance (offset from text), and restart semantics
+  // (newPage resets per-page; continuous keeps running).
+  function applyLineNumbers(){
+    var wrappers=document.querySelectorAll('.page-wrapper[data-line-num-by]');
+    if(!wrappers.length)return;
+    var runningNum=null;  // continuous/newSection running counter across pages
+    var prevSection=null;
+    wrappers.forEach(function(wrap){
+      var body=wrap.querySelector('.page-body');
+      if(!body)return;
+      // Clear any previous markers before re-applying (keeps idempotent).
+      body.querySelectorAll('.line-number').forEach(function(m){m.remove();});
+      var by=parseInt(wrap.dataset.lineNumBy||'1')||1;
+      var start=parseInt(wrap.dataset.lineNumStart||'1')||1;
+      var dist=parseFloat(wrap.dataset.lineNumDist||'0')||0;
+      var restart=wrap.dataset.lineNumRestart||'newPage';
+      var sectionIdx=wrap.dataset.sectionIdx||'-1';
+      var sectionChanged=prevSection!==null && prevSection!==sectionIdx;
+      var current;
+      if(restart==='newPage'||runningNum===null) current=start;
+      else if(restart==='newSection') current=sectionChanged?start:runningNum;
+      else current=runningNum;  // continuous
+      prevSection=sectionIdx;
+      body.style.position='relative';
+      var bodyRect=body.getBoundingClientRect();
+      var seenY=Object.create(null);
+      var lineTops=[];
+      var walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT,{
+        acceptNode:function(n){
+          if(!n.textContent.trim())return NodeFilter.FILTER_REJECT;
+          // Skip line numbers we just injected (idempotence), footers, etc.
+          var el=n.parentElement;
+          while(el && el!==body){
+            if(el.classList && (el.classList.contains('line-number')
+              ||el.classList.contains('footnotes')))return NodeFilter.FILTER_REJECT;
+            el=el.parentElement;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      var node;
+      while((node=walker.nextNode())){
+        var range=document.createRange();
+        range.selectNodeContents(node);
+        var rects=range.getClientRects();
+        for(var i=0;i<rects.length;i++){
+          var r=rects[i];
+          var y=Math.round(r.top-bodyRect.top);
+          if(!(y in seenY)){seenY[y]=true;lineTops.push(y);}
+        }
+      }
+      lineTops.sort(function(a,b){return a-b;});
+      var leftPt=-(dist+20);
+      for(var li=0;li<lineTops.length;li++){
+        var n=current+li;
+        if(by>1 && n%by!==0)continue;
+        var marker=document.createElement('span');
+        marker.className='line-number';
+        marker.textContent=n;
+        marker.style.cssText='position:absolute;left:'+leftPt+'pt;'
+          +'font-size:inherit;color:#000;vertical-align:baseline;'
+          +'user-select:none;pointer-events:none;';
+        marker.style.top=lineTops[li]+'px';
+        body.appendChild(marker);
+      }
+      runningNum=current+lineTops.length;
+    });
+  }
+  function positionFootnotes(){
+    document.querySelectorAll('.page').forEach(function(page){
+      var body=page.querySelector('.page-body');
+      if(!body)return;
+      var fn=body.querySelector('.footnotes');
+      if(!fn)return;
+      // Calculate space between last content element and page bottom
+      var lastBot=0;
+      Array.from(body.children).forEach(function(c){
+        if(c===fn)return;
+        var b=c.offsetTop+c.offsetHeight-body.offsetTop;
+        if(b>lastBot)lastBot=b;
+      });
+      var gap=maxBodyH-lastBot-fn.offsetHeight;
+      if(gap>0)fn.style.marginTop=gap+'px';
+    });
+  }
+  function applyPageFilter(){
+    var rf=window._requestedPages;
+    if(!rf||rf.length===0)return;
+    var rSet=new Set(rf);
+    document.querySelectorAll('.page').forEach(function(p,i){
+      if(!rSet.has(i+1))p.style.display='none';
+    });
+  }
+  function _loadKatexLazy(cb){
+    // Watch mode: doc may start formula-free (KaTeX tags omitted), then
+    // gain a formula via SSE patch. Inject CSS + JS on demand; on load,
+    // re-invoke the caller so the new formula renders.
+    if(window._katexLoading){window._katexCallbacks=window._katexCallbacks||[];window._katexCallbacks.push(cb);return;}
+    window._katexLoading=true;window._katexCallbacks=[cb];
+    var link=document.createElement('link');link.rel='stylesheet';link.href='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';link.onerror=function(){this.remove();};document.head.appendChild(link);
+    var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
+    s.onload=function(){(window._katexCallbacks||[]).forEach(function(f){try{f();}catch(e){}});window._katexCallbacks=[];};
+    s.onerror=function(){document.querySelectorAll('.katex-formula:not(.katex-rendered)').forEach(function(el){el.textContent=el.dataset.formula;el.style.fontFamily='monospace';el.style.color='#666';el.classList.add('katex-rendered');});};
+    document.head.appendChild(s);
+  }
+  function renderNewContent(){
+    var pending=document.querySelectorAll('.katex-formula:not(.katex-rendered)');
+    if(typeof katex!=='undefined'){
+      pending.forEach(function(el){
+        try{katex.render(el.dataset.formula,el,{throwOnError:false,displayMode:!!el.dataset.display});}catch(e){el.textContent=el.dataset.formula;}
+        el.classList.add('katex-rendered');
+      });
+    }else if(pending.length>0){
+      _loadKatexLazy(renderNewContent);
+    }
+    // CJK punctuation compression on new content
+    var cjkRe=/([\u3000-\u303F\uFF01-\uFF60\uFE30-\uFE4F\u2014\u2015\u2026\u2018\u2019\u201C\u201D])/;
+    document.querySelectorAll('.page-body').forEach(function(body){
+      var tw=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+      var nodes=[];while(tw.nextNode()){var n=tw.currentNode;if(!n.parentNode||!n.parentNode.classList||!n.parentNode.classList.contains('cjk-done'))nodes.push(n);}
+      nodes.forEach(function(nd){
+        if(!cjkRe.test(nd.textContent))return;
+        var parts=nd.textContent.split(cjkRe);
+        if(parts.length<=1)return;
+        var frag=document.createDocumentFragment();
+        for(var i=0;i<parts.length;i++){
+          if(!parts[i])continue;
+          if(cjkRe.test(parts[i])){var sp=document.createElement('span');sp.textContent=parts[i];sp.style.marginRight='-0.2em';sp.classList.add('cjk-done');frag.appendChild(sp);}
+          else frag.appendChild(document.createTextNode(parts[i]));
+        }
+        nd.parentNode.replaceChild(frag,nd);
+      });
+    });
+  }
+  window._wordPaginate=function(){renderNewContent();setTimeout(paginate,0);};
+
+  function scalePages(animate){
+    var bs=getComputedStyle(document.body);
+    var availW=document.body.clientWidth-parseFloat(bs.paddingLeft)-parseFloat(bs.paddingRight);
+    if(!animate){
+      document.querySelectorAll('.page-wrapper,.page').forEach(function(el){el.style.transition='none';});
+    }
+    document.querySelectorAll('.page-wrapper').forEach(function(wrapper){
+      var page=wrapper.querySelector('.page');
+      if(!page||page.style.display==='none')return;
+      var pageW=page.offsetWidth;
+      var pageH=page.offsetHeight;
+      var s=Math.min(availW/pageW,1);
+      page.style.transform='scale('+s+')';
+      wrapper.style.height=(pageH*s)+'px';
+      wrapper.style.width=(pageW*s)+'px';
+    });
+    if(!animate){
+      document.body.offsetHeight;
+      document.querySelectorAll('.page-wrapper,.page').forEach(function(el){el.style.transition='';});
+    }
+    if(window._pendingScrollTo){
+      var _sel=window._pendingScrollTo;
+      var _beh=window._pendingScrollBehavior||'smooth';
+      window._pendingScrollTo=null;
+      window._pendingScrollBehavior=null;
+      var _t;
+      if(_sel==='_last_page'){var _lb=document.querySelector('.page-wrapper:last-of-type .page-body');if(_lb){var _ck=Array.from(_lb.children).filter(function(c){return !c.classList.contains('footnotes')&&c.style.display!=='none'&&c.offsetHeight>0;});_t=_ck[_ck.length-1]||_lb;}if(!_t){var _ap=document.querySelectorAll('.page');_t=_ap[_ap.length-1];}}
+      else{_t=document.querySelector(_sel);if(!_t){var _ap=document.querySelectorAll('.page');_t=_ap[_ap.length-1];}}
+      if(_t)_t.scrollIntoView({behavior:_beh,block:'center'});
+    }
+    var _frz=document.getElementById('_sse_freeze');
+    if(_frz)_frz.remove();
+  }
+  var _resizeTimer;
+  window.addEventListener('resize',function(){
+    clearTimeout(_resizeTimer);
+    _resizeTimer=setTimeout(function(){scalePages(true);},100);
+  });
+  var SCREENSHOT=location.hash.indexOf('screenshot')>=0;
+  window._wpSync=SCREENSHOT;
+  if(SCREENSHOT){
+    var rp=window._requestedPages;
+    if(rp&&rp.length===1&&rp[0]===1){
+      var first=document.querySelector('.page');
+      if(first){first.style.height=first.style.minHeight;first.style.overflow='hidden';}
+      document.querySelectorAll('.page-wrapper:not(:first-of-type)').forEach(function(w){w.style.display='none';});
+      positionFootnotes();wrapFloats();applyLineNumbers();
+    }else{paginate();}
+  }else{setTimeout(paginate,100);}
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_wordInit);
+else _wordInit();
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>product-catalog.xlsx</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f0f0;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+.file-title {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #217346;
+    color: #fff;
+}
+.sheet-tabs {
+    display: flex;
+    background: #e0e0e0;
+    border-top: 1px solid #ccc;
+    overflow-x: auto;
+    padding: 0 8px;
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+.sheet-tab {
+    --tab-color: #e8e8e8;
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-top: none;
+    background: var(--tab-color);
+    color: #fff;
+    margin-bottom: 0;
+    border-radius: 0 0 3px 3px;
+    white-space: nowrap;
+    user-select: none;
+    position: relative;
+    transition: background 0.15s, color 0.15s;
+}
+.sheet-tab[style*="--tab-color:#e8e8e8"], .sheet-tab:not([style*="--tab-color"]) {
+    color: #333;
+}
+.sheet-tab:hover { opacity: 0.85; }
+.sheet-tab.active {
+    background: linear-gradient(to bottom, #fff 60%, color-mix(in srgb, var(--tab-color) 30%, #fff)) !important;
+    color: #333 !important;
+    border-color: #aaa;
+    border-bottom: 3px solid var(--tab-color);
+    font-weight: 600;
+}
+.sheet-slider { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.sheet-content { background: #fff; display: none; flex: 1; min-height: 0; }
+.sheet-content.active { display: flex; flex-direction: column; }
+.table-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    background: #fff;
+}
+table {
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: 'Calibri', 'Segoe UI', sans-serif;
+    table-layout: fixed;
+}
+.row-header-col { width: 30pt; }
+th {
+    background: #f8f8f8;
+    border: 1px solid #e0e0e0;
+    font-weight: normal;
+    color: #666;
+    font-size: 10px;
+    text-align: center;
+    padding: 2px 4px;
+}
+.corner-cell { background: #f0f0f0; z-index: 4; }
+.col-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f8f8;
+    min-width: 50px;
+    cursor: s-resize;
+}
+.row-header {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f8f8f8;
+    min-width: 40px;
+    cursor: e-resize;
+    /* Drop right border so the data cell's own (often darker) left border shows through.
+       Otherwise, with border-collapse, the row-header's light grey right border can win
+       the collapse contest and erase the merged-cell left border (rowspan cells especially). */
+    border-right: none;
+}
+td {
+    /* Default gridlines are painted with inset box-shadow instead of
+       border, so they do NOT participate in border-collapse tie-breaking.
+       Explicit OOXML borders (rendered as inline border styles on cells
+       with an OOXML style) always win at cell boundaries; missing cells
+       / style-0 cells no longer erase neighbours' black borders via the
+       CSS position-based tie-break. Right+bottom gridlines are owned by
+       each cell; first-row top and first-col left gridlines are added
+       via the :first-child rules below. Scoped to table:not(.no-grid) so
+       sheets with showGridLines=false suppress the default gridlines while
+       still honouring explicit OOXML cell borders (inline styles). */
+    padding: 2px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    max-width: 500px;
+    word-break: break-all; /* CJK text wrapping support */
+}
+table:not(.no-grid) td { box-shadow: inset -1px -1px 0 #e0e0e0; }
+/* Text spill: a left/general text cell with empty right-neighbours paints
+   its overflow across them (Excel fidelity). The td stays 1 column wide so
+   borders/gridlines/merges are unaffected; overflow:visible lets the inner
+   span bleed into the (empty) neighbour cells. The span clips at max-width =
+   own width + summed empty-neighbour widths, stopping before the first
+   occupied cell — matching real Excel. */
+td.spill { overflow: visible; }
+td.spill .spill-text {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    vertical-align: bottom;
+}
+/* Shrink-to-fit: the font is compressed (inline font-size) so the whole
+   string fits the column. Keep it inline-block + clip (never ellipsis) so
+   the full text shows; the td's ellipsis rule must not re-truncate it. */
+.shrink-fit {
+    display: inline-block;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: visible;
+}
+table:not(.no-grid) tbody tr:first-child td { box-shadow: inset -1px -1px 0 #e0e0e0, inset 0 1px 0 #e0e0e0; }
+table:not(.no-grid) tr td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 0 0 #e0e0e0; }
+table:not(.no-grid) tbody tr:first-child td:first-of-type { box-shadow: inset -1px -1px 0 #e0e0e0, inset 1px 1px 0 #e0e0e0; }
+.empty-sheet {
+    padding: 40px;
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+}
+/* Chart containers */
+.chart-container {
+    margin: 16px auto;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.chart-container svg { display: block; }
+/* Truncation warning */
+.truncation-warning {
+    padding: 8px 16px;
+    background: #FFF3CD;
+    color: #856404;
+    border: 1px solid #FFEEBA;
+    font-size: 12px;
+    text-align: center;
+    margin: 4px 0;
+}
+/* Screen reader only */
+.sr-only { position:absolute; clip:rect(0 0 0 0); width:1px; height:1px; overflow:hidden; }
+/* Print styles */
+@media print {
+    .file-title, .sheet-tabs { display: none !important; }
+    .table-wrapper { max-height: none !important; overflow: visible !important; flex: none !important; }
+    body { background: #fff !important; min-height: auto !important; }
+    .sheet-content { display: block !important; flex: none !important; }
+    td { max-width: none !important; white-space: normal !important; overflow: visible !important; }
+}
+:root,
+[data-theme="light"] {
+  --office-preview-bg: #ffffff;
+  --office-preview-text: #111827;
+  --office-preview-muted: #6b7280;
+  --office-preview-surface: #f8fafc;
+  --office-preview-surface-2: #f3f4f6;
+  --office-preview-border: #d0d7de;
+  --office-preview-selection: rgba(37, 99, 235, 0.16);
+}
+
+[data-theme="dark"] {
+  --office-preview-bg: #0f172a;
+  --office-preview-text: #e5e7eb;
+  --office-preview-muted: #94a3b8;
+  --office-preview-surface: #111827;
+  --office-preview-surface-2: #1e293b;
+  --office-preview-border: #334155;
+  --office-preview-selection: rgba(96, 165, 250, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --office-preview-bg: #0f172a;
+    --office-preview-text: #e5e7eb;
+    --office-preview-muted: #94a3b8;
+    --office-preview-surface: #111827;
+    --office-preview-surface-2: #1e293b;
+    --office-preview-border: #334155;
+    --office-preview-selection: rgba(96, 165, 250, 0.22);
+  }
+}
+
+body {
+  background: var(--office-preview-bg);
+  color: var(--office-preview-text);
+}
+</style>
+</head>
+<body>
+<div class="file-title">product-catalog.xlsx</div>
+<div class="sheet-slider">
+<div class="sheet-content active" data-sheet="0">
+<div class="table-wrapper" style="position:relative">
+<table style="width:654.9pt">
+<caption class="sr-only">Laptops</caption>
+<colgroup><col class="row-header-col"><col style="width:63.02pt"><col style="width:115.53pt"><col style="width:183.79pt"><col style="width:73.52pt"><col style="width:84.02pt"><col style="width:52.51pt"><col style="width:52.51pt"></colgroup>
+<thead><tr><th class="corner-cell" style="position:sticky;top:0;left:0;z-index:4"></th><th class="col-header" data-path="/Laptops/col[A]" style="position:sticky;top:0;z-index:3">A</th><th class="col-header" data-path="/Laptops/col[B]" style="position:sticky;top:0;z-index:3">B</th><th class="col-header" data-path="/Laptops/col[C]" style="position:sticky;top:0;z-index:3">C</th><th class="col-header" data-path="/Laptops/col[D]" style="position:sticky;top:0;z-index:3">D</th><th class="col-header" data-path="/Laptops/col[E]" style="position:sticky;top:0;z-index:3">E</th><th class="col-header" data-path="/Laptops/col[F]" style="position:sticky;top:0;z-index:3">F</th><th class="col-header" data-path="/Laptops/col[G]" style="position:sticky;top:0;z-index:3">G</th></tr></thead>
+<tbody>
+<tr data-row="0-1" style="height:40pt;background:#fff" data-frozen="1"><th class="row-header" data-path="/Laptops/row[1]" style="position:sticky;top:0;left:0;z-index:3">1</th><td data-path="/Laptops/A1" colspan="7" style="position:sticky;top:0;z-index:1;font-weight:bold;font-size:18pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center;vertical-align:middle">TechGear — Laptop Series 2026</td></tr>
+<tr data-row="0-2" style="height:25pt"><th class="row-header" data-path="/Laptops/row[2]">2</th><td data-path="/Laptops/A2" colspan="7" style="font-weight:bold;font-size:12pt;font-family:'Calibri';color:#FFFFFF;background:#003366;text-align:center">Pro Series</td></tr>
+<tr data-row="0-3" style="height:22pt"><th class="row-header" data-path="/Laptops/row[3]">3</th><td data-path="/Laptops/A3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">SKU</td><td data-path="/Laptops/B3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">Model</td><td data-path="/Laptops/C3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center;white-space:pre-wrap;word-wrap:break-word">Specs</td><td data-path="/Laptops/D3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">Price</td><td data-path="/Laptops/E3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">Discount Price</td><td data-path="/Laptops/F3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">Stock</td><td data-path="/Laptops/G3" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#0078D4;text-align:center">MOQ</td></tr>
+<tr data-row="0-4"><th class="row-header" data-path="/Laptops/row[4]">4</th><td data-path="/Laptops/A4" style="font-size:11pt;font-family:'Calibri'">TG-P001</td><td data-path="/Laptops/B4" style="font-size:11pt;font-family:'Calibri'">Pro 14 Base</td><td data-path="/Laptops/C4" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i7-14700H, 16GB DDR5, 512GB SSD, 14&quot; 2K IPS</td><td data-path="/Laptops/D4" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,299.00</td><td data-path="/Laptops/E4" data-formula="=D4*0.85" style="font-size:11pt;font-family:'Calibri'">$1,104.15</td><td data-path="/Laptops/F4" style="font-size:11pt;font-family:'Calibri';text-align:right">45</td><td data-path="/Laptops/G4" style="font-size:11pt;font-family:'Calibri';text-align:right">5</td></tr>
+<tr data-row="0-5"><th class="row-header" data-path="/Laptops/row[5]">5</th><td data-path="/Laptops/A5" style="font-size:11pt;font-family:'Calibri'">TG-P002</td><td data-path="/Laptops/B5" style="font-size:11pt;font-family:'Calibri'">Pro 14 Plus</td><td data-path="/Laptops/C5" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i7-14700H, 32GB DDR5, 1TB SSD, 14&quot; 2.8K OLED</td><td data-path="/Laptops/D5" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,699.00</td><td data-path="/Laptops/E5" data-formula="=D5*0.85" style="font-size:11pt;font-family:'Calibri'">$1,444.15</td><td data-path="/Laptops/F5" style="font-size:11pt;font-family:'Calibri';text-align:right">32</td><td data-path="/Laptops/G5" style="font-size:11pt;font-family:'Calibri';text-align:right">3</td></tr>
+<tr data-row="0-6"><th class="row-header" data-path="/Laptops/row[6]">6</th><td data-path="/Laptops/A6" style="font-size:11pt;font-family:'Calibri'">TG-P003</td><td data-path="/Laptops/B6" style="font-size:11pt;font-family:'Calibri'">Pro 16</td><td data-path="/Laptops/C6" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i9-14900H, 32GB DDR5, 1TB SSD, RTX 4060, 16&quot; 2.5K IPS 165Hz</td><td data-path="/Laptops/D6" style="font-size:11pt;font-family:'Calibri';text-align:right">$2,099.00</td><td data-path="/Laptops/E6" data-formula="=D6*0.85" style="font-size:11pt;font-family:'Calibri'">$1,784.15</td><td data-path="/Laptops/F6" style="font-size:11pt;font-family:'Calibri';text-align:right;background:#FFC7CE">8</td><td data-path="/Laptops/G6" style="font-size:11pt;font-family:'Calibri';text-align:right">2</td></tr>
+<tr data-row="0-7"><th class="row-header" data-path="/Laptops/row[7]">7</th><td data-path="/Laptops/A7" style="font-size:11pt;font-family:'Calibri'">TG-P004</td><td data-path="/Laptops/B7" style="font-size:11pt;font-family:'Calibri'">Pro 16 Max</td><td data-path="/Laptops/C7" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i9-14900HX, 64GB DDR5, 2TB SSD, RTX 4080, 16&quot; 4K Mini-LED</td><td data-path="/Laptops/D7" style="font-size:11pt;font-family:'Calibri';text-align:right">$2,499.00</td><td data-path="/Laptops/E7" data-formula="=D7*0.85" style="font-size:11pt;font-family:'Calibri'">$2,124.15</td><td data-path="/Laptops/F7" style="font-size:11pt;font-family:'Calibri';text-align:right;background:#FFC7CE">5</td><td data-path="/Laptops/G7" style="font-size:11pt;font-family:'Calibri';text-align:right">1</td></tr>
+<tr data-row="0-8" style="height:25pt"><th class="row-header" data-path="/Laptops/row[8]">8</th><td data-path="/Laptops/A8" colspan="7" style="font-weight:bold;font-size:12pt;font-family:'Calibri';color:#FFFFFF;background:#003366;text-align:center">Air Series</td></tr>
+<tr data-row="0-9"><th class="row-header" data-path="/Laptops/row[9]">9</th><td data-path="/Laptops/A9" style="font-size:11pt;font-family:'Calibri'">TG-A001</td><td data-path="/Laptops/B9" style="font-size:11pt;font-family:'Calibri'">Air 13</td><td data-path="/Laptops/C9" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i5-1340P, 8GB LPDDR5, 256GB SSD, 13.3&quot; FHD IPS</td><td data-path="/Laptops/D9" style="font-size:11pt;font-family:'Calibri';text-align:right">$899.00</td><td data-path="/Laptops/E9" data-formula="=D9*0.85" style="font-size:11pt;font-family:'Calibri'">$764.15</td><td data-path="/Laptops/F9" style="font-size:11pt;font-family:'Calibri';text-align:right">120</td><td data-path="/Laptops/G9" style="font-size:11pt;font-family:'Calibri';text-align:right">10</td></tr>
+<tr data-row="0-10"><th class="row-header" data-path="/Laptops/row[10]">10</th><td data-path="/Laptops/A10" style="font-size:11pt;font-family:'Calibri'">TG-A002</td><td data-path="/Laptops/B10" style="font-size:11pt;font-family:'Calibri'">Air 13 Plus</td><td data-path="/Laptops/C10" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i5-1340P, 16GB LPDDR5, 512GB SSD, 13.3&quot; 2.5K IPS</td><td data-path="/Laptops/D10" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,099.00</td><td data-path="/Laptops/E10" data-formula="=D10*0.85" style="font-size:11pt;font-family:'Calibri'">$934.15</td><td data-path="/Laptops/F10" style="font-size:11pt;font-family:'Calibri';text-align:right">85</td><td data-path="/Laptops/G10" style="font-size:11pt;font-family:'Calibri';text-align:right">5</td></tr>
+<tr data-row="0-11"><th class="row-header" data-path="/Laptops/row[11]">11</th><td data-path="/Laptops/A11" style="font-size:11pt;font-family:'Calibri'">TG-A003</td><td data-path="/Laptops/B11" style="font-size:11pt;font-family:'Calibri'">Air 15</td><td data-path="/Laptops/C11" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i7-1360P, 16GB LPDDR5, 512GB SSD, 15.6&quot; FHD IPS</td><td data-path="/Laptops/D11" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,299.00</td><td data-path="/Laptops/E11" data-formula="=D11*0.85" style="font-size:11pt;font-family:'Calibri'">$1,104.15</td><td data-path="/Laptops/F11" style="font-size:11pt;font-family:'Calibri';text-align:right">60</td><td data-path="/Laptops/G11" style="font-size:11pt;font-family:'Calibri';text-align:right">5</td></tr>
+<tr data-row="0-12"><th class="row-header" data-path="/Laptops/row[12]">12</th><td data-path="/Laptops/A12" style="font-size:11pt;font-family:'Calibri'">TG-A004</td><td data-path="/Laptops/B12" style="font-size:11pt;font-family:'Calibri'">Air 15 Pro</td><td data-path="/Laptops/C12" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i7-1360P, 32GB LPDDR5, 1TB SSD, 15.6&quot; 2.8K OLED</td><td data-path="/Laptops/D12" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,599.00</td><td data-path="/Laptops/E12" data-formula="=D12*0.85" style="font-size:11pt;font-family:'Calibri'">$1,359.15</td><td data-path="/Laptops/F12" style="font-size:11pt;font-family:'Calibri';text-align:right;background:#FFC7CE">3</td><td data-path="/Laptops/G12" style="font-size:11pt;font-family:'Calibri';text-align:right">2</td></tr>
+<tr data-row="0-13" style="height:25pt"><th class="row-header" data-path="/Laptops/row[13]">13</th><td data-path="/Laptops/A13" colspan="7" style="font-weight:bold;font-size:12pt;font-family:'Calibri';color:#FFFFFF;background:#003366;text-align:center">Studio Series</td></tr>
+<tr data-row="0-14"><th class="row-header" data-path="/Laptops/row[14]">14</th><td data-path="/Laptops/A14" style="font-size:11pt;font-family:'Calibri'">TG-S001</td><td data-path="/Laptops/B14" style="font-size:11pt;font-family:'Calibri'">Studio 15</td><td data-path="/Laptops/C14" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i7-14700H, 32GB DDR5, 1TB SSD, RTX 4060, 15.6&quot; 3.5K OLED</td><td data-path="/Laptops/D14" style="font-size:11pt;font-family:'Calibri';text-align:right">$1,799.00</td><td data-path="/Laptops/E14" data-formula="=D14*0.85" style="font-size:11pt;font-family:'Calibri'">$1,529.15</td><td data-path="/Laptops/F14" style="font-size:11pt;font-family:'Calibri';text-align:right">25</td><td data-path="/Laptops/G14" style="font-size:11pt;font-family:'Calibri';text-align:right">2</td></tr>
+<tr data-row="0-15"><th class="row-header" data-path="/Laptops/row[15]">15</th><td data-path="/Laptops/A15" style="font-size:11pt;font-family:'Calibri'">TG-S002</td><td data-path="/Laptops/B15" style="font-size:11pt;font-family:'Calibri'">Studio 15 Pro</td><td data-path="/Laptops/C15" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i9-14900H, 64GB DDR5, 2TB SSD, RTX 4070, 15.6&quot; 3.5K OLED</td><td data-path="/Laptops/D15" style="font-size:11pt;font-family:'Calibri';text-align:right">$2,299.00</td><td data-path="/Laptops/E15" data-formula="=D15*0.85" style="font-size:11pt;font-family:'Calibri'">$1,954.15</td><td data-path="/Laptops/F15" style="font-size:11pt;font-family:'Calibri';text-align:right">15</td><td data-path="/Laptops/G15" style="font-size:11pt;font-family:'Calibri';text-align:right">1</td></tr>
+<tr data-row="0-16"><th class="row-header" data-path="/Laptops/row[16]">16</th><td data-path="/Laptops/A16" style="font-size:11pt;font-family:'Calibri'">TG-S003</td><td data-path="/Laptops/B16" style="font-size:11pt;font-family:'Calibri'">Studio 17</td><td data-path="/Laptops/C16" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i9-14900HX, 64GB DDR5, 2TB SSD, RTX 4080, 17&quot; 4K Mini-LED</td><td data-path="/Laptops/D16" style="font-size:11pt;font-family:'Calibri';text-align:right">$2,899.00</td><td data-path="/Laptops/E16" data-formula="=D16*0.85" style="font-size:11pt;font-family:'Calibri'">$2,464.15</td><td data-path="/Laptops/F16" style="font-size:11pt;font-family:'Calibri';text-align:right;background:#FFC7CE">7</td><td data-path="/Laptops/G16" style="font-size:11pt;font-family:'Calibri';text-align:right">1</td></tr>
+<tr data-row="0-17"><th class="row-header" data-path="/Laptops/row[17]">17</th><td data-path="/Laptops/A17" style="font-size:11pt;font-family:'Calibri'">TG-S004</td><td data-path="/Laptops/B17" style="font-size:11pt;font-family:'Calibri'">Studio 17 Max</td><td data-path="/Laptops/C17" style="font-size:11pt;font-family:'Calibri';white-space:pre-wrap;word-wrap:break-word">Intel i9-14900HX, 128GB DDR5, 4TB SSD, RTX 4090, 17&quot; 4K Mini-LED</td><td data-path="/Laptops/D17" style="font-size:11pt;font-family:'Calibri';text-align:right">$3,299.00</td><td data-path="/Laptops/E17" data-formula="=D17*0.85" style="font-size:11pt;font-family:'Calibri'">$2,804.15</td><td data-path="/Laptops/F17" style="font-size:11pt;font-family:'Calibri';text-align:right;background:#FFC7CE">3</td><td data-path="/Laptops/G17" style="font-size:11pt;font-family:'Calibri';text-align:right">1</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sheet-content" data-sheet="1">
+<div class="table-wrapper" style="position:relative">
+<table style="width:609.9pt">
+<caption class="sr-only">Accessories</caption>
+<colgroup><col class="row-header-col"><col style="width:63.02pt"><col style="width:126.03pt"><col style="width:157.54pt"><col style="width:73.52pt"><col style="width:52.51pt"><col style="width:63.02pt"><col style="width:44.27pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Accessories/col[A]">A</th><th class="col-header" data-path="/Accessories/col[B]">B</th><th class="col-header" data-path="/Accessories/col[C]">C</th><th class="col-header" data-path="/Accessories/col[D]">D</th><th class="col-header" data-path="/Accessories/col[E]">E</th><th class="col-header" data-path="/Accessories/col[F]">F</th><th class="col-header" data-path="/Accessories/col[G]">G</th></tr></thead>
+<tbody>
+<tr data-row="1-1" style="height:40pt"><th class="row-header" data-path="/Accessories/row[1]">1</th><td data-path="/Accessories/A1" colspan="6" style="font-weight:bold;font-size:18pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center;vertical-align:middle">TechGear — Accessories 2026</td><td data-path="/Accessories/G1"></td></tr>
+<tr data-row="1-2"><th class="row-header" data-path="/Accessories/row[2]">2</th><td data-path="/Accessories/A2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">SKU</td><td data-path="/Accessories/B2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">Product</td><td data-path="/Accessories/C2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">Description</td><td data-path="/Accessories/D2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">Price</td><td data-path="/Accessories/E2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">Stock</td><td data-path="/Accessories/F2" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#FF6B00;text-align:center">Order Qty</td><td data-path="/Accessories/G2"></td></tr>
+<tr data-row="1-3"><th class="row-header" data-path="/Accessories/row[3]">3</th><td data-path="/Accessories/A3" style="font-size:11pt;font-family:'Calibri'">TG-C001</td><td data-path="/Accessories/B3" style="font-size:11pt;font-family:'Calibri'">USB-C Charger 100W</td><td data-path="/Accessories/C3" style="font-size:11pt;font-family:'Calibri'">GaN 100W USB-C PD charger, dual port</td><td data-path="/Accessories/D3" style="font-size:11pt;font-family:'Calibri';text-align:right">$59.99</td><td data-path="/Accessories/E3" style="font-size:11pt;font-family:'Calibri';text-align:right">200</td><td data-path="/Accessories/F3"></td><td data-path="/Accessories/G3"></td></tr>
+<tr data-row="1-4"><th class="row-header" data-path="/Accessories/row[4]">4</th><td data-path="/Accessories/A4" style="font-size:11pt;font-family:'Calibri'">TG-M001</td><td data-path="/Accessories/B4" style="font-size:11pt;font-family:'Calibri'">Wireless Mouse Pro</td><td data-path="/Accessories/C4" style="font-size:11pt;font-family:'Calibri'">Ergonomic wireless mouse, 4000 DPI, Bluetooth 5.3</td><td data-path="/Accessories/D4" style="font-size:11pt;font-family:'Calibri';text-align:right">$49.99</td><td data-path="/Accessories/E4" style="font-size:11pt;font-family:'Calibri';text-align:right">350</td><td data-path="/Accessories/F4"></td><td data-path="/Accessories/G4"></td></tr>
+<tr data-row="1-5"><th class="row-header" data-path="/Accessories/row[5]">5</th><td data-path="/Accessories/A5" style="font-size:11pt;font-family:'Calibri'">TG-K001</td><td data-path="/Accessories/B5" style="font-size:11pt;font-family:'Calibri'">Mechanical Keyboard</td><td data-path="/Accessories/C5" style="font-size:11pt;font-family:'Calibri'">Low-profile mechanical keyboard, RGB backlit, USB-C</td><td data-path="/Accessories/D5" style="font-size:11pt;font-family:'Calibri';text-align:right">$89.99</td><td data-path="/Accessories/E5" style="font-size:11pt;font-family:'Calibri';text-align:right">180</td><td data-path="/Accessories/F5"></td><td data-path="/Accessories/G5"></td></tr>
+<tr data-row="1-6"><th class="row-header" data-path="/Accessories/row[6]">6</th><td data-path="/Accessories/A6" style="font-size:11pt;font-family:'Calibri'">TG-B001</td><td data-path="/Accessories/B6" style="font-size:11pt;font-family:'Calibri'">Laptop Backpack</td><td data-path="/Accessories/C6" style="font-size:11pt;font-family:'Calibri'">Water-resistant 17&quot; laptop backpack, USB charging port</td><td data-path="/Accessories/D6" style="font-size:11pt;font-family:'Calibri';text-align:right">$79.99</td><td data-path="/Accessories/E6" style="font-size:11pt;font-family:'Calibri';text-align:right">150</td><td data-path="/Accessories/F6"></td><td data-path="/Accessories/G6"></td></tr>
+<tr data-row="1-7"><th class="row-header" data-path="/Accessories/row[7]">7</th><td data-path="/Accessories/A7" style="font-size:11pt;font-family:'Calibri'">TG-ST001</td><td data-path="/Accessories/B7" style="font-size:11pt;font-family:'Calibri'">Laptop Stand</td><td data-path="/Accessories/C7" style="font-size:11pt;font-family:'Calibri'">Aluminum adjustable laptop stand, foldable</td><td data-path="/Accessories/D7" style="font-size:11pt;font-family:'Calibri';text-align:right">$45.99</td><td data-path="/Accessories/E7" style="font-size:11pt;font-family:'Calibri';text-align:right">220</td><td data-path="/Accessories/F7"></td><td data-path="/Accessories/G7"></td></tr>
+<tr data-row="1-8"><th class="row-header" data-path="/Accessories/row[8]">8</th><td data-path="/Accessories/A8" style="font-size:11pt;font-family:'Calibri'">TG-D001</td><td data-path="/Accessories/B8" style="font-size:11pt;font-family:'Calibri'">USB-C Dock 12-in-1</td><td data-path="/Accessories/C8" style="font-size:11pt;font-family:'Calibri'">12-in-1 USB-C docking station, HDMI 4K, Ethernet, SD</td><td data-path="/Accessories/D8" style="font-size:11pt;font-family:'Calibri';text-align:right">$129.99</td><td data-path="/Accessories/E8" style="font-size:11pt;font-family:'Calibri';text-align:right">95</td><td data-path="/Accessories/F8"></td><td data-path="/Accessories/G8"></td></tr>
+<tr data-row="1-9"><th class="row-header" data-path="/Accessories/row[9]">9</th><td data-path="/Accessories/A9" style="font-size:11pt;font-family:'Calibri'">TG-H001</td><td data-path="/Accessories/B9" style="font-size:11pt;font-family:'Calibri'">ANC Headphones</td><td data-path="/Accessories/C9" style="font-size:11pt;font-family:'Calibri'">Active noise canceling, 40hr battery, Bluetooth 5.3</td><td data-path="/Accessories/D9" style="font-size:11pt;font-family:'Calibri';text-align:right">$149.99</td><td data-path="/Accessories/E9" style="font-size:11pt;font-family:'Calibri';text-align:right">130</td><td data-path="/Accessories/F9"></td><td data-path="/Accessories/G9"></td></tr>
+<tr data-row="1-10"><th class="row-header" data-path="/Accessories/row[10]">10</th><td data-path="/Accessories/A10" style="font-size:11pt;font-family:'Calibri'">TG-CS001</td><td data-path="/Accessories/B10" style="font-size:11pt;font-family:'Calibri'">Protective Case</td><td data-path="/Accessories/C10" style="font-size:11pt;font-family:'Calibri'">Hardshell protective case, 13-17&quot; universal fit</td><td data-path="/Accessories/D10" style="font-size:11pt;font-family:'Calibri';text-align:right">$39.99</td><td data-path="/Accessories/E10" style="font-size:11pt;font-family:'Calibri';text-align:right">400</td><td data-path="/Accessories/F10"></td><td data-path="/Accessories/G10"></td></tr>
+</tbody>
+</table>
+<div style="position:absolute;left:565.63pt;top:148pt;width:400pt;height:250pt;z-index:10;pointer-events:auto" data-from-col="6" data-from-row="7">
+<div class="xlsx-shape" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:visible"><svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="100" height="100" fill="#FF0000" stroke="#000000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><div style="position:relative;z-index:1;width:100%;padding:4px;text-align:center;pointer-events:none"><div style="text-align:center"><span style="font-size:10pt;font-weight:bold;color:#FFFFFF;">NEW</span></div></div></div></div>
+<div style="position:absolute;left:565.63pt;top:163pt;width:400pt;height:250pt;z-index:10;pointer-events:auto" data-from-col="6" data-from-row="8">
+<div class="xlsx-shape" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:visible"><svg style="position:absolute;inset:0;width:100%;height:100%;overflow:visible" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="100" height="100" fill="#FF0000" stroke="#000000" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><div style="position:relative;z-index:1;width:100%;padding:4px;text-align:center;pointer-events:none"><div style="text-align:center"><span style="font-size:10pt;font-weight:bold;color:#FFFFFF;">NEW</span></div></div></div></div>
+</div>
+</div>
+<div class="sheet-content" data-sheet="2">
+<div class="table-wrapper" style="position:relative">
+<table style="width:408.09pt">
+<caption class="sr-only">Order Form</caption>
+<colgroup><col class="row-header-col"><col style="width:84.02pt"><col style="width:147.04pt"><col style="width:73.52pt"><col style="width:73.52pt"></colgroup>
+<thead><tr><th class="corner-cell"></th><th class="col-header" data-path="/Order Form/col[A]">A</th><th class="col-header" data-path="/Order Form/col[B]">B</th><th class="col-header" data-path="/Order Form/col[C]">C</th><th class="col-header" data-path="/Order Form/col[D]">D</th></tr></thead>
+<tbody>
+<tr data-row="2-1" style="height:40pt"><th class="row-header" data-path="/Order Form/row[1]">1</th><td data-path="/Order Form/A1" colspan="4" style="font-weight:bold;font-size:18pt;font-family:'Calibri';color:#FFFFFF;background:#107C10;text-align:center;vertical-align:middle">TechGear — Order Form</td></tr>
+<tr data-row="2-2"><th class="row-header" data-path="/Order Form/row[2]">2</th><td data-path="/Order Form/A2"></td><td data-path="/Order Form/B2"></td><td data-path="/Order Form/C2"></td><td data-path="/Order Form/D2"></td></tr>
+<tr data-row="2-3"><th class="row-header" data-path="/Order Form/row[3]">3</th><td data-path="/Order Form/A3" class="spill" style="font-weight:bold;font-size:13pt;font-family:'Calibri';color:#107C10"><span class="spill-text" style="max-width:378.09pt">Customer Information</span></td><td data-path="/Order Form/B3"></td><td data-path="/Order Form/C3"></td><td data-path="/Order Form/D3"></td></tr>
+<tr data-row="2-4"><th class="row-header" data-path="/Order Form/row[4]">4</th><td data-path="/Order Form/A4" class="spill" style="font-weight:bold;font-size:11pt;font-family:'Calibri'"><span class="spill-text" style="max-width:378.09pt">Company:</span></td><td data-path="/Order Form/B4" style="font-size:11pt;font-family:'Calibri';border-bottom:1px solid #999999"></td><td data-path="/Order Form/C4"></td><td data-path="/Order Form/D4"></td></tr>
+<tr data-row="2-5"><th class="row-header" data-path="/Order Form/row[5]">5</th><td data-path="/Order Form/A5" class="spill" style="font-weight:bold;font-size:11pt;font-family:'Calibri'"><span class="spill-text" style="max-width:378.09pt">Contact:</span></td><td data-path="/Order Form/B5" style="font-size:11pt;font-family:'Calibri';border-bottom:1px solid #999999"></td><td data-path="/Order Form/C5"></td><td data-path="/Order Form/D5"></td></tr>
+<tr data-row="2-6"><th class="row-header" data-path="/Order Form/row[6]">6</th><td data-path="/Order Form/A6" class="spill" style="font-weight:bold;font-size:11pt;font-family:'Calibri'"><span class="spill-text" style="max-width:378.09pt">Address:</span></td><td data-path="/Order Form/B6" style="font-size:11pt;font-family:'Calibri';border-bottom:1px solid #999999"></td><td data-path="/Order Form/C6"></td><td data-path="/Order Form/D6"></td></tr>
+<tr data-row="2-7"><th class="row-header" data-path="/Order Form/row[7]">7</th><td data-path="/Order Form/A7" class="spill" style="font-weight:bold;font-size:11pt;font-family:'Calibri'"><span class="spill-text" style="max-width:378.09pt">Phone:</span></td><td data-path="/Order Form/B7" style="font-size:11pt;font-family:'Calibri';border-bottom:1px solid #999999"></td><td data-path="/Order Form/C7"></td><td data-path="/Order Form/D7"></td></tr>
+<tr data-row="2-8"><th class="row-header" data-path="/Order Form/row[8]">8</th><td data-path="/Order Form/A8"></td><td data-path="/Order Form/B8"></td><td data-path="/Order Form/C8"></td><td data-path="/Order Form/D8"></td></tr>
+<tr data-row="2-9"><th class="row-header" data-path="/Order Form/row[9]">9</th><td data-path="/Order Form/A9" class="spill" style="font-weight:bold;font-size:13pt;font-family:'Calibri';color:#107C10"><span class="spill-text" style="max-width:378.09pt">Order Details</span></td><td data-path="/Order Form/B9"></td><td data-path="/Order Form/C9"></td><td data-path="/Order Form/D9"></td></tr>
+<tr data-row="2-10"><th class="row-header" data-path="/Order Form/row[10]">10</th><td data-path="/Order Form/A10" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#107C10;text-align:center">Product</td><td data-path="/Order Form/B10" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#107C10;text-align:center">Qty</td><td data-path="/Order Form/C10" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#107C10;text-align:center">Unit Price</td><td data-path="/Order Form/D10" style="font-weight:bold;font-size:11pt;font-family:'Calibri';color:#FFFFFF;background:#107C10;text-align:center">Subtotal</td></tr>
+<tr data-row="2-11"><th class="row-header" data-path="/Order Form/row[11]">11</th><td data-path="/Order Form/A11" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B11" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C11" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D11" data-formula="=B11*C11" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-12"><th class="row-header" data-path="/Order Form/row[12]">12</th><td data-path="/Order Form/A12" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B12" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C12" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D12" data-formula="=B12*C12" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-13"><th class="row-header" data-path="/Order Form/row[13]">13</th><td data-path="/Order Form/A13" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B13" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C13" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D13" data-formula="=B13*C13" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-14"><th class="row-header" data-path="/Order Form/row[14]">14</th><td data-path="/Order Form/A14" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B14" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C14" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D14" data-formula="=B14*C14" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-15"><th class="row-header" data-path="/Order Form/row[15]">15</th><td data-path="/Order Form/A15" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B15" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C15" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D15" data-formula="=B15*C15" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-16"><th class="row-header" data-path="/Order Form/row[16]">16</th><td data-path="/Order Form/A16" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B16" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C16" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D16" data-formula="=B16*C16" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-17"><th class="row-header" data-path="/Order Form/row[17]">17</th><td data-path="/Order Form/A17" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B17" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C17" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D17" data-formula="=B17*C17" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-18"><th class="row-header" data-path="/Order Form/row[18]">18</th><td data-path="/Order Form/A18" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B18" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C18" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D18" data-formula="=B18*C18" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-19"><th class="row-header" data-path="/Order Form/row[19]">19</th><td data-path="/Order Form/A19" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B19" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C19" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D19" data-formula="=B19*C19" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-20"><th class="row-header" data-path="/Order Form/row[20]">20</th><td data-path="/Order Form/A20" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/B20" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/C20" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC"></td><td data-path="/Order Form/D20" data-formula="=B20*C20" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #CCCCCC;border-left:1px solid #CCCCCC;border-right:1px solid #CCCCCC;border-bottom:1px solid #CCCCCC">$0.00</td></tr>
+<tr data-row="2-21"><th class="row-header" data-path="/Order Form/row[21]">21</th><td data-path="/Order Form/A21"></td><td data-path="/Order Form/B21"></td><td data-path="/Order Form/C21"></td><td data-path="/Order Form/D21"></td></tr>
+<tr data-row="2-22"><th class="row-header" data-path="/Order Form/row[22]">22</th><td data-path="/Order Form/A22"></td><td data-path="/Order Form/B22"></td><td data-path="/Order Form/C22" style="font-weight:bold;font-size:11pt;font-family:'Calibri';text-align:right">Subtotal</td><td data-path="/Order Form/D22" data-formula="=SUM(D11:D20)" style="font-weight:bold;font-size:11pt;font-family:'Calibri';border-top:1px solid #000;border-left:1px solid #000;border-right:1px solid #000;border-bottom:1px solid #000">$0.00</td></tr>
+<tr data-row="2-23"><th class="row-header" data-path="/Order Form/row[23]">23</th><td data-path="/Order Form/A23"></td><td data-path="/Order Form/B23"></td><td data-path="/Order Form/C23" style="font-weight:bold;font-size:11pt;font-family:'Calibri';text-align:right">Tax (8%)</td><td data-path="/Order Form/D23" data-formula="=D22*0.08" style="font-weight:bold;font-size:11pt;font-family:'Calibri';border-top:1px solid #000;border-left:1px solid #000;border-right:1px solid #000;border-bottom:1px solid #000">$0.00</td></tr>
+<tr data-row="2-24"><th class="row-header" data-path="/Order Form/row[24]">24</th><td data-path="/Order Form/A24"></td><td data-path="/Order Form/B24"></td><td data-path="/Order Form/C24" style="font-weight:bold;font-size:11pt;font-family:'Calibri';text-align:right">Shipping</td><td data-path="/Order Form/D24" style="font-size:11pt;font-family:'Calibri';border-top:1px solid #000;border-left:1px solid #000;border-right:1px solid #000;border-bottom:1px solid #000"></td></tr>
+<tr data-row="2-25"><th class="row-header" data-path="/Order Form/row[25]">25</th><td data-path="/Order Form/A25"></td><td data-path="/Order Form/B25"></td><td data-path="/Order Form/C25" style="font-weight:bold;font-size:13pt;font-family:'Calibri';color:#107C10;text-align:right">Grand Total</td><td data-path="/Order Form/D25" data-formula="=D22+D23+D24" style="font-weight:bold;font-size:13pt;font-family:'Calibri';color:#107C10;border-top:2px solid #107C10;border-left:2px solid #107C10;border-right:2px solid #107C10;border-bottom:2px solid #107C10">$0.00</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="sheet-tabs" role="tablist">
+  <div class="sheet-tab active" style="--tab-color:#0078D4" data-sheet="0" role="tab" tabindex="0" onclick="switchSheet(0)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(0)">Laptops</div>
+  <div class="sheet-tab" style="--tab-color:#FF6B00" data-sheet="1" role="tab" tabindex="0" onclick="switchSheet(1)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(1)">Accessories</div>
+  <div class="sheet-tab" style="--tab-color:#107C10" data-sheet="2" role="tab" tabindex="0" onclick="switchSheet(2)" onkeydown="if(event.key==='Enter'||event.key===' ')switchSheet(2)">Order Form</div>
+</div>
+<script>
+function switchSheet(idx) {
+    document.querySelectorAll('.sheet-tab').forEach(function(t) {
+        t.classList.toggle('active', parseInt(t.getAttribute('data-sheet')) === idx);
+    });
+    document.querySelectorAll('.sheet-content').forEach(function(c) {
+        c.classList.toggle('active', parseInt(c.getAttribute('data-sheet')) === idx);
+    });
+    window.scrollTo(0, 0);
+}
+// Fix frozen row sticky top values using actual rendered heights
+document.querySelectorAll('.table-wrapper table').forEach(function(table) {
+    var thead = table.querySelector('thead');
+    if (!thead) return;
+    var theadH = thead.offsetHeight;
+    var cumTop = theadH;
+    var frozen = table.querySelectorAll('tr[data-frozen]');
+    frozen.forEach(function(tr) {
+        tr.querySelectorAll('th, td').forEach(function(cell) {
+            if (cell.style.position === 'sticky') cell.style.top = cumTop + 'px';
+        });
+        cumTop += tr.offsetHeight;
+    });
+});
+</script>
+</body>
+</html>

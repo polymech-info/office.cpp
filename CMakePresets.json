@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "dotnet",
+      "displayName": "OfficeCLI .NET",
+      "description": "Configure CMake wrapper targets for OfficeCLI .NET build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/dotnet",
+      "cacheVariables": {
+        "OFFICECLI_CONFIGURATION": "Release",
+        "OFFICECLI_PUBLISH_RUNTIME": "win-x64",
+        "OFFICECLI_PUBLISH_DIR": "${sourceDir}/../../dist/win-x64/bin"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dotnet",
+      "configurePreset": "dotnet",
+      "targets": ["officecli_build"]
+    },
+    {
+      "name": "dotnet-slnx",
+      "configurePreset": "dotnet",
+      "targets": ["officecli_slnx_build"]
+    },
+    {
+      "name": "dotnet-test",
+      "configurePreset": "dotnet",
+      "targets": ["officecli_test"]
+    },
+    {
+      "name": "dotnet-publish",
+      "configurePreset": "dotnet",
+      "targets": ["officecli_publish"]
+    }
+  ]
+}

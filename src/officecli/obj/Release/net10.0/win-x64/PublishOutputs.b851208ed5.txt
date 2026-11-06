@@ -1,0 +1,2 @@
+C:\Users\zx\Desktop\pixlwiz\pixlwiz\packages\office\src\officecli\bin\Release\net10.0\win-x64\publish\officecli.pdb
+C:\Users\zx\Desktop\pixlwiz\pixlwiz\packages\office\src\officecli\bin\Release\net10.0\win-x64\publish\officecli.exe

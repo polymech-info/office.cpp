@@ -1,0 +1,14 @@
+{
+  "name": "mono-cpp-osx",
+  "private": true,
+  "description": "mono-cpp macOS build scripts (remote SSH build compatible)",
+  "scripts": {
+    "install:mac": "bash osx/install.sh",
+    "configure": "cmake --preset release-macos -G Ninja",
+    "build": "cmake --build --preset release-macos",
+    "rebuild": "cmake --preset release-macos -G Ninja && cmake --build --preset release-macos",
+    "clean": "cmake --build --preset release-macos --target clean",
+    "clean:all": "rm -rf build/macos-release && rm -rf ~/.mono-cpp-fetchcontent",
+    "run": "./dist/mono-cpp --help"
+  }
+}
