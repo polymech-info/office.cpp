@@ -1,4 +1,9 @@
-# OfficeCLI
+# PolyMech's CPP port of OfficeCLI
+
+See official sources, this is WIP. Currently it supports parsing and set.
+
+## Official Readme
+
 
 > **OfficeCLI is the world's first and the best Office suite designed for AI agents.**
 
