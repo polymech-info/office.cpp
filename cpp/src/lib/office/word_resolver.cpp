@@ -1,5 +1,7 @@
 #include "word_resolver.h"
 
+#include "office_xml.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <optional>
@@ -34,28 +36,6 @@ struct WordParagraph {
 struct WordDocument {
     std::vector<WordParagraph> paragraphs;
 };
-
-bool localNameEquals(const char *name, std::string_view expected) {
-    if (name == nullptr) return false;
-    std::string_view full(name);
-    auto colon = full.find(':');
-    auto local = colon == std::string_view::npos ? full : full.substr(colon + 1);
-    return local == expected;
-}
-
-pugi::xml_node childByLocalName(pugi::xml_node parent, std::string_view name) {
-    for (auto child : parent.children()) {
-        if (localNameEquals(child.name(), name)) return child;
-    }
-    return {};
-}
-
-std::string attrByLocalName(pugi::xml_node node, std::string_view name) {
-    for (auto attr : node.attributes()) {
-        if (localNameEquals(attr.name(), name)) return attr.value();
-    }
-    return {};
-}
 
 ResolveResult fail(std::string message) {
     return {.error = std::move(message)};

@@ -1,5 +1,7 @@
 #include "ooxml_metadata.h"
 
+#include "office_xml.hpp"
+
 #include <map>
 #include <sstream>
 #include <string>
@@ -9,14 +11,6 @@
 
 namespace office {
 namespace {
-
-bool localNameEquals(const char *name, std::string_view expected) {
-    if (name == nullptr) return false;
-    std::string_view full(name);
-    auto colon = full.find(':');
-    auto local = colon == std::string_view::npos ? full : full.substr(colon + 1);
-    return local == expected;
-}
 
 ResolveResult fail(std::string message) {
     return {.error = std::move(message)};

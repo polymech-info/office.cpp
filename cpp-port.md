@@ -1,6 +1,6 @@
 # C++ Port TODOs: Parsing for `get` and Selectors
 
-Scope: parser plus the C++ edit slice for docx, xlsx, and pptx (`create`, `view`, `get`, `query`, `add`, `set`, `remove`, `move`, `swap`, `batch`, `validate`). Charts, pivots, raw XML, watch, marks, HTML preview, and animations stay on the vendored officecli.
+Scope: parser plus the C++ edit slice for docx, xlsx, and pptx (`create`, `view`, `get`, `query`, `add`, `set`, `remove`, `move`, `swap`, `batch`, `validate`). PowerPoint pictures, solid backgrounds, transitions, and entrance/exit animations (`fade`, `fly`, `zoom`, `wipe`, and the other filter effects) are properties on those verbs. Charts, pivots, raw XML, watch, marks, HTML preview, morph, and emphasis animations stay on the vendored officecli.
 
 ## Edit slice
 

@@ -1,39 +1,11 @@
 #include "document_node.h"
 
+#include "office_util.hpp"
+
 #include <sstream>
 #include <string_view>
 
 namespace office {
-namespace {
-
-std::string jsonEscape(std::string_view input) {
-    std::ostringstream out;
-    for (unsigned char c : input) {
-        switch (c) {
-            case '"': out << "\\\""; break;
-            case '\\': out << "\\\\"; break;
-            case '\b': out << "\\b"; break;
-            case '\f': out << "\\f"; break;
-            case '\n': out << "\\n"; break;
-            case '\r': out << "\\r"; break;
-            case '\t': out << "\\t"; break;
-            default:
-                if (c < 0x20) {
-                    const char *hex = "0123456789ABCDEF";
-                    out << "\\u00" << hex[(c >> 4) & 0xF] << hex[c & 0xF];
-                } else {
-                    out << static_cast<char>(c);
-                }
-        }
-    }
-    return out.str();
-}
-
-std::string jstr(std::string_view s) {
-    return "\"" + jsonEscape(s) + "\"";
-}
-
-} // namespace
 
 std::string toJson(const DocumentNode &node) {
     std::ostringstream out;

@@ -1,6 +1,7 @@
 #include "main_office_cli.h"
 
-#include <cctype>
+#include "office_util.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -16,17 +17,6 @@
 
 namespace office {
 namespace {
-
-bool endsWithInsensitive(const std::string &value, const std::string &suffix) {
-    if (suffix.size() > value.size()) return false;
-    const auto offset = value.size() - suffix.size();
-    for (std::size_t i = 0; i < suffix.size(); ++i) {
-        const auto a = static_cast<unsigned char>(value[offset + i]);
-        const auto b = static_cast<unsigned char>(suffix[i]);
-        if (std::tolower(a) != std::tolower(b)) return false;
-    }
-    return true;
-}
 
 PropMap propsFromPairs(const std::vector<std::string> &pairs, std::string &error) {
     PropMap props;
@@ -69,15 +59,17 @@ const char *editHelp(const std::string &topic) {
                "row shorthand: --prop c1=Alice --prop c2=10\n";
     }
     if (topic == "pptx") {
-        return "pptx add types: slide, shape\n"
-               "slide props: title\n"
-               "shape props: text, x, y, w, h, font, size, color, name\n"
-               "paths: /slide[1], /slide[1]/shape[1]\n";
+        return "pptx add types: slide, shape, picture\n"
+               "slide props: title, background, transition\n"
+               "shape props: text, x, y, w, h, font, size, color, fill, preset, animation\n"
+               "picture props: src, x, y, w, h, name, alt\n"
+               "animation: fade-entrance-500, fly-entrance-left-600, zoom-exit-400, none\n"
+               "paths: /slide[1], /slide[1]/shape[1], /slide[1]/picture[1]\n";
     }
     return "pm-office edit commands: create, add, set, remove, move, swap, view, batch, validate, get, query\n"
            "formats: docx, xlsx, pptx\n"
            "view modes: text, outline, stats\n"
-           "charts, pivots, raw XML, animations, and HTML preview are not in this build\n"
+           "charts, pivots, raw XML, morph, emphasis animations, and HTML preview are not in this build\n"
            "try: pm-office office help docx|xlsx|pptx\n";
 }
 
@@ -184,8 +176,8 @@ int OfficeCliCommands::run() const {
     }
 
     if (get != nullptr && get->parsed()) {
-        const bool is_docx = endsWithInsensitive(get_file, ".docx");
-        const bool is_xlsx = endsWithInsensitive(get_file, ".xlsx");
+        const bool is_docx = endsWithCi(get_file, ".docx");
+        const bool is_xlsx = endsWithCi(get_file, ".xlsx");
         auto parsed_path = parser::parsePath(get_path, is_docx ? "docx" : "xlsx");
         if (!parsed_path.ok) {
             std::cerr << "office get parse failed: " << parsed_path.error << "\n";
@@ -197,7 +189,7 @@ int OfficeCliCommands::run() const {
             result = resolveWordGet(package, parsed_path.ast, get_depth);
         } else if (is_xlsx) {
             result = resolveXlsxGet(package, parsed_path.ast, get_depth);
-        } else if (endsWithInsensitive(get_file, ".pptx")) {
+        } else if (endsWithCi(get_file, ".pptx")) {
             return printEdit(documentGet(get_file, get_path, get_depth));
         } else {
             std::cerr << "office get failed: unsupported document extension\n";
@@ -212,8 +204,8 @@ int OfficeCliCommands::run() const {
     }
 
     if (query != nullptr && query->parsed()) {
-        const bool is_docx = endsWithInsensitive(query_file, ".docx");
-        const bool is_xlsx = endsWithInsensitive(query_file, ".xlsx");
+        const bool is_docx = endsWithCi(query_file, ".docx");
+        const bool is_xlsx = endsWithCi(query_file, ".xlsx");
         auto parsed_selector = parser::parseSelector(selector);
         if (!parsed_selector.ok) {
             std::cerr << "office query parse failed: " << parsed_selector.error << "\n";
@@ -225,7 +217,7 @@ int OfficeCliCommands::run() const {
             result = resolveWordQuery(package, parsed_selector.ast);
         } else if (is_xlsx) {
             result = resolveXlsxQuery(package, parsed_selector.ast);
-        } else if (endsWithInsensitive(query_file, ".pptx")) {
+        } else if (endsWithCi(query_file, ".pptx")) {
             return printEdit(documentQuery(query_file, selector));
         } else {
             std::cerr << "office query failed: unsupported document extension\n";

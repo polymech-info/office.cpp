@@ -1,5 +1,7 @@
 #include "xlsx_package.h"
 
+#include "fs/path_sanitizer.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -30,7 +32,7 @@ public:
         if (reader_ == nullptr) {
             throw std::runtime_error("failed to create zip reader");
         }
-        const auto path_string = path.string();
+        const auto path_string = media::path::path_to_utf8(path);
         const auto err = mz_zip_reader_open_file(reader_, path_string.c_str());
         if (err != MZ_OK) {
             mz_zip_reader_delete(&reader_);

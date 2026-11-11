@@ -1,5 +1,7 @@
 #include "office_parser.h"
 
+#include "office_util.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -19,41 +21,8 @@ std::string toString(std::string_view sv) {
     return std::string(sv.begin(), sv.end());
 }
 
-std::string jsonEscape(std::string_view input) {
-    std::ostringstream out;
-    for (unsigned char c : input) {
-        switch (c) {
-            case '"': out << "\\\""; break;
-            case '\\': out << "\\\\"; break;
-            case '\b': out << "\\b"; break;
-            case '\f': out << "\\f"; break;
-            case '\n': out << "\\n"; break;
-            case '\r': out << "\\r"; break;
-            case '\t': out << "\\t"; break;
-            default:
-                if (c < 0x20) {
-                    const char *hex = "0123456789ABCDEF";
-                    out << "\\u00" << hex[(c >> 4) & 0xF] << hex[c & 0xF];
-                } else {
-                    out << static_cast<char>(c);
-                }
-        }
-    }
-    return out.str();
-}
-
-std::string jstr(std::string_view s) {
-    return "\"" + jsonEscape(s) + "\"";
-}
-
 bool ieq(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
-            return false;
-        }
-    }
-    return true;
+    return lower(std::string(a)) == lower(std::string(b));
 }
 
 bool isIdentStart(char c) {
@@ -73,9 +42,7 @@ bool allLetters(std::string_view s) {
 }
 
 std::string upper(std::string_view s) {
-    std::string out = toString(s);
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    return out;
+    return office::upper(toString(s));
 }
 
 bool parseCellRef(std::string_view s, CellRef &cell) {

@@ -3,7 +3,8 @@
  * view text/outline print plain text. Failures exit 1.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { inflateRawSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,38 @@ function expectOk(args) {
   if (result.error) fail(result.error.message, result);
   if (result.status !== 0) fail(args.join(' '), result);
   return result;
+}
+
+function zipEntries(file) {
+  const data = readFileSync(file);
+  let eocd = -1;
+  for (let i = data.length - 22; i >= 0; i -= 1) {
+    if (data.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) fail(`not a zip: ${file}`);
+  const entries = new Map();
+  let cursor = data.readUInt32LE(eocd + 16);
+  const count = data.readUInt16LE(eocd + 10);
+  for (let n = 0; n < count; n += 1) {
+    if (data.readUInt32LE(cursor) !== 0x02014b50) break;
+    const method = data.readUInt16LE(cursor + 10);
+    const compressed = data.readUInt32LE(cursor + 20);
+    const nameLength = data.readUInt16LE(cursor + 28);
+    const extraLength = data.readUInt16LE(cursor + 30);
+    const commentLength = data.readUInt16LE(cursor + 32);
+    const local = data.readUInt32LE(cursor + 42);
+    const name = data.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8');
+    const localName = data.readUInt16LE(local + 26);
+    const localExtra = data.readUInt16LE(local + 28);
+    const start = local + 30 + localName + localExtra;
+    const bytes = data.subarray(start, start + compressed);
+    entries.set(name, method === 0 ? Buffer.from(bytes) : inflateRawSync(bytes));
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
 }
 
 function expectJson(args) {
@@ -111,6 +144,27 @@ try {
   expectJson(['office', 'add', pptx, '/slide[1]', '--type', 'shape', '--prop', 'text=Body']);
   const slides = expectOk(['office', 'view', pptx, 'text']);
   if (!slides.stdout.includes('Deck') || !slides.stdout.includes('Body')) fail('pptx text', slides);
+  expectJson(['office', 'validate', pptx]);
+  expectJson(['office', 'set', pptx, '/slide[1]', '--prop', 'background=1B2838', '--prop', 'transition=fade']);
+  expectJson(['office', 'set', pptx, '/slide[1]/shape[2]', '--prop', 'fill=2E86C1', '--prop', 'animation=fade-entrance-500']);
+  const slideXml = zipEntries(pptx).get('ppt/slides/slide1.xml').toString('utf8');
+  if (!slideXml.includes('1B2838') || !slideXml.includes('<p:fade') || !slideXml.includes('filter="fade"')) {
+    fail('pptx background, transition, and animation were not written', { status: 0, stdout: slideXml, stderr: '' });
+  }
+  const dropped = run(['office', 'set', pptx, '/slide[1]/shape[2]', '--prop', 'glow=1']);
+  if (dropped.status === 0) fail('unknown pptx property should fail', dropped);
+
+  const png = resolve(dir, 'pixel.png');
+  writeFileSync(png, Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64'));
+  expectJson(['office', 'add', pptx, '/slide[1]', '--type', 'picture', '--prop', `src=${png}`, '--prop', 'name=Shot']);
+  const packed = zipEntries(pptx);
+  const withPicture = packed.get('ppt/slides/slide1.xml').toString('utf8');
+  if (!withPicture.includes('r:embed') || !withPicture.includes('Shot')) {
+    fail('pptx picture was not placed', { status: 0, stdout: withPicture, stderr: '' });
+  }
+  if (!packed.has('ppt/media/image1.png')) fail('pptx media part missing');
   expectJson(['office', 'validate', pptx]);
 
   const exists = run(['office', 'create', docx]);

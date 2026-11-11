@@ -1,5 +1,7 @@
 #include "xlsx_workbook.h"
 
+#include "office_xml.hpp"
+
 #include <algorithm>
 #include <map>
 #include <sstream>
@@ -10,55 +12,6 @@
 
 namespace office {
 namespace {
-
-std::string jsonEscape(std::string_view input) {
-    std::ostringstream out;
-    for (unsigned char c : input) {
-        switch (c) {
-            case '"': out << "\\\""; break;
-            case '\\': out << "\\\\"; break;
-            case '\b': out << "\\b"; break;
-            case '\f': out << "\\f"; break;
-            case '\n': out << "\\n"; break;
-            case '\r': out << "\\r"; break;
-            case '\t': out << "\\t"; break;
-            default:
-                if (c < 0x20) {
-                    const char *hex = "0123456789ABCDEF";
-                    out << "\\u00" << hex[(c >> 4) & 0xF] << hex[c & 0xF];
-                } else {
-                    out << static_cast<char>(c);
-                }
-        }
-    }
-    return out.str();
-}
-
-std::string jstr(std::string_view s) {
-    return "\"" + jsonEscape(s) + "\"";
-}
-
-bool localNameEquals(const char *name, std::string_view expected) {
-    if (name == nullptr) return false;
-    std::string_view full(name);
-    auto colon = full.find(':');
-    auto local = colon == std::string_view::npos ? full : full.substr(colon + 1);
-    return local == expected;
-}
-
-pugi::xml_node childByLocalName(pugi::xml_node parent, std::string_view name) {
-    for (auto child : parent.children()) {
-        if (localNameEquals(child.name(), name)) return child;
-    }
-    return {};
-}
-
-std::string attrByLocalName(pugi::xml_node node, std::string_view name) {
-    for (auto attr : node.attributes()) {
-        if (localNameEquals(attr.name(), name)) return attr.value();
-    }
-    return {};
-}
 
 pugi::xml_document parseXmlPart(const XlsxPackage &package, std::string_view part_name, std::string &error) {
     pugi::xml_document doc;

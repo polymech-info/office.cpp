@@ -80,7 +80,7 @@ Edit commands print JSON on stdout (`{"ok":true,...}`) and exit 0. `view text` a
 ./dist/pm-office office add deck.pptx / --type slide --prop title=Deck
 ```
 
-Supported add types: docx `paragraph`, `run`, `table`, `row`, `cell`; xlsx `sheet`, `row`, `cell`; pptx `slide`, `shape`. `move` and `swap` cover docx paragraphs and tables. Charts, pivots, raw XML, animations, watch, and HTML preview are not in this build; those commands exit 1.
+Supported add types: docx `paragraph`, `run`, `table`, `row`, `cell`; xlsx `sheet`, `row`, `cell`; pptx `slide`, `shape`, `picture`. Slide `background` and `transition`, and shape `animation` (`fade-entrance-500`, `fly`, `zoom`, `wipe`, and the other entrance/exit effects), are properties of `set`. `move` and `swap` cover docx paragraphs and tables. Charts, pivots, raw XML, morph, emphasis animations, and HTML preview are not in this build; those commands exit 1.
 
 `npm test` runs `tests/test-edit.mjs`. `PM_OFFICE_CLI` overrides the executable path.
 

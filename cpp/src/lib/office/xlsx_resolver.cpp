@@ -1,5 +1,7 @@
 #include "xlsx_resolver.h"
 
+#include "office_xml.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -34,21 +36,6 @@ struct XlsxCell {
 struct QueryState {
     std::vector<XlsxCell> cells;
 };
-
-bool localNameEquals(const char *name, std::string_view expected) {
-    if (name == nullptr) return false;
-    std::string_view full(name);
-    auto colon = full.find(':');
-    auto local = colon == std::string_view::npos ? full : full.substr(colon + 1);
-    return local == expected;
-}
-
-pugi::xml_node childByLocalName(pugi::xml_node parent, std::string_view name) {
-    for (auto child : parent.children()) {
-        if (localNameEquals(child.name(), name)) return child;
-    }
-    return {};
-}
 
 std::optional<int> parseInt(std::string_view value) {
     if (value.empty()) return std::nullopt;

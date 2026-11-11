@@ -1,5 +1,7 @@
 #include "ooxml_zip.h"
 
+#include "fs/path_sanitizer.hpp"
+
 #include <algorithm>
 #include <ctime>
 #include <utility>
@@ -27,7 +29,7 @@ public:
             error_ = "failed to create zip reader";
             return;
         }
-        const auto path_string = path.string();
+        const auto path_string = media::path::path_to_utf8(path);
         if (mz_zip_reader_open_file(reader_, path_string.c_str()) != MZ_OK) {
             mz_zip_reader_delete(&reader_);
             error_ = "failed to open zip package: " + path_string;
@@ -60,7 +62,7 @@ public:
             error_ = "failed to create zip writer";
             return;
         }
-        const auto path_string = path.string();
+        const auto path_string = media::path::path_to_utf8(path);
         if (mz_zip_writer_open_file(writer_, path_string.c_str(), 0, 0) != MZ_OK) {
             mz_zip_writer_delete(&writer_);
             error_ = "failed to open zip for write: " + path_string;
@@ -169,11 +171,13 @@ bool writeOoxmlParts(const std::filesystem::path &path, const OoxmlParts &packag
     if (!path.parent_path().empty()) {
         std::filesystem::create_directories(path.parent_path(), ec);
         if (ec) {
-            error = "failed to create directory: " + path.parent_path().string();
+            error = "failed to create directory: " + media::path::path_to_utf8(path.parent_path());
             return false;
         }
     }
-    const auto tmp = path.parent_path() / (path.filename().string() + ".pmoffice-tmp");
+    auto tmp_name = path.filename();
+    tmp_name += ".pmoffice-tmp";
+    const auto tmp = path.parent_path() / tmp_name;
     std::filesystem::remove(tmp, ec);
     {
         ZipWriter writer(tmp);
@@ -213,7 +217,7 @@ bool writeOoxmlParts(const std::filesystem::path &path, const OoxmlParts &packag
         std::filesystem::rename(tmp, path, ec);
     }
     if (ec) {
-        error = "failed to replace package: " + path.string();
+        error = "failed to replace package: " + media::path::path_to_utf8(path);
         std::filesystem::remove(tmp, ec);
         return false;
     }

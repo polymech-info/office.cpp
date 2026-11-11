@@ -150,6 +150,10 @@ add_library(office STATIC
 target_include_directories(office PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/office
 )
+target_include_directories(office PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../commons.cpp/src
+)
+target_compile_definitions(office PRIVATE _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING)
 
 target_compile_features(office PUBLIC cxx_std_20)
 
