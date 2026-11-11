@@ -1,6 +1,14 @@
 # C++ Port TODOs: Parsing for `get` and Selectors
 
-Scope: port only the parsing layer needed by `get` paths and query/set selectors. Defer real OOXML traversal, mutation, rendering, resident mode, MCP, and watch behavior.
+Scope: parser plus the C++ edit slice for docx, xlsx, and pptx (`create`, `view`, `get`, `query`, `add`, `set`, `remove`, `move`, `swap`, `batch`, `validate`). Charts, pivots, raw XML, watch, marks, HTML preview, and animations stay on the vendored officecli.
+
+## Edit slice
+
+- [x] Standalone CLI is `pm-office` (`packages/office/cpp`). `npm test` there runs `tests/test-edit.mjs`.
+- [x] Create, view (`text` / `outline` / `stats`), add, set, remove, move, swap, batch, and validate for the core types.
+- [x] docx: paragraph, run, table, row, cell. xlsx: sheet, row, cell. pptx: slide, shape.
+- [x] Host LLM tools `office_*` behind `FEATURE_OFFICE_LLM_TOOLS`, including the Android agent stack.
+- [ ] Charts, pivots, raw XML, `--after find:`, docx `@paraId` edits, xlsx column insert, and move/swap outside docx paragraphs and tables.
 
 ## Current Boilerplate Decisions
 
@@ -19,19 +27,19 @@ Scope: port only the parsing layer needed by `get` paths and query/set selectors
 Current CLI shape:
 
 ```bash
-./cpp/dist/mono-cpp office parse-path Sheet1!A1:D10 --format xlsx
-./cpp/dist/mono-cpp office parse-selector 'cell[value>5000 and value<8000]'
-./cpp/dist/mono-cpp office package-list example.xlsx
-./cpp/dist/mono-cpp office package-read example.xlsx xl/workbook.xml
-./cpp/dist/mono-cpp office xlsx-info example.xlsx
-./cpp/dist/mono-cpp office get example.xlsx Sheet1!A1 --depth 1
-./cpp/dist/mono-cpp office get example.xlsx Sheet1!A1:D10 --depth 1
-./cpp/dist/mono-cpp office get example.xlsx /sheet[1]/cell[@ref=A1]
-./cpp/dist/mono-cpp office get example.xlsx /meta/core
-./cpp/dist/mono-cpp office query example.xlsx 'cell[value>5000 and value<8000]'
-./cpp/dist/mono-cpp office get example.docx /body/p[1]/r[1] --depth 1
-./cpp/dist/mono-cpp office get example.docx /meta/core
-./cpp/dist/mono-cpp office query example.docx 'paragraph[style=Heading1] > run[bold=true]'
+./cpp/dist/pm-office office parse-path Sheet1!A1:D10 --format xlsx
+./cpp/dist/pm-office office parse-selector 'cell[value>5000 and value<8000]'
+./cpp/dist/pm-office office package-list example.xlsx
+./cpp/dist/pm-office office package-read example.xlsx xl/workbook.xml
+./cpp/dist/pm-office office xlsx-info example.xlsx
+./cpp/dist/pm-office office get example.xlsx Sheet1!A1 --depth 1
+./cpp/dist/pm-office office get example.xlsx Sheet1!A1:D10 --depth 1
+./cpp/dist/pm-office office get example.xlsx /sheet[1]/cell[@ref=A1]
+./cpp/dist/pm-office office get example.xlsx /meta/core
+./cpp/dist/pm-office office query example.xlsx 'cell[value>5000 and value<8000]'
+./cpp/dist/pm-office office get example.docx /body/p[1]/r[1] --depth 1
+./cpp/dist/pm-office office get example.docx /meta/core
+./cpp/dist/pm-office office query example.docx 'paragraph[style=Heading1] > run[bold=true]'
 ```
 
 ## Parser Boundary

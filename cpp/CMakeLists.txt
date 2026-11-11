@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(mono-cpp
+project(pm-office
     VERSION 0.1.0
-    DESCRIPTION "C++ CLI Boilerplate"
+    DESCRIPTION "pm-office OOXML create and edit CLI"
     LANGUAGES CXX
 )
 
@@ -137,8 +137,10 @@ add_subdirectory(packages/ipc)
 # development consumer; production embedding should link this library directly.
 add_library(office STATIC
     src/lib/office/document_node.cpp
+    src/lib/office/office_edit.cpp
     src/lib/office/office_parser.cpp
     src/lib/office/ooxml_metadata.cpp
+    src/lib/office/ooxml_zip.cpp
     src/lib/office/word_resolver.cpp
     src/lib/office/xlsx_package.cpp
     src/lib/office/xlsx_resolver.cpp

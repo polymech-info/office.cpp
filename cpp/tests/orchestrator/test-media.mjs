@@ -467,7 +467,7 @@ function suiteOfficeSmokeCli(rep, officeExe = OFFICE_EXE) {
     const docxFixture = createMinimalDocxFixture();
     const smoke = [
       {
-        label: 'mono-cpp --help advertises office',
+        label: 'pm-office --help advertises office',
         args: ['--help'],
         expectStdout: /office/,
       },
@@ -479,7 +479,8 @@ function suiteOfficeSmokeCli(rep, officeExe = OFFICE_EXE) {
           /parse-selector/.test(stdout) &&
           /xlsx-info/.test(stdout) &&
           /\bget\b/.test(stdout) &&
-          /\bquery\b/.test(stdout),
+          /\bquery\b/.test(stdout) &&
+          /\bcreate\b/.test(stdout),
       },
       {
         label: 'package-list lists XLSX workbook parts',

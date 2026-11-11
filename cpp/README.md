@@ -1,9 +1,9 @@
-# mono-cpp
+# pm-office
 
-Minimal C++ CLI boilerplate built with CMake.
+C++ OOXML library and CLI for reading, creating, and editing `.docx`, `.xlsx`, and `.pptx`.
 
 Cross-platform builds for Windows, macOS, and Linux using CLI11, tomlplusplus, and spdlog.
-The Office port is built as a reusable static library; the `mono-cpp office ...` CLI is a development harness only.
+The office code is a static library. `pm-office office ...` is the test harness. The host links the same sources as `pm-office-cpp` when `FEATURE_OFFICE_EXTRACTOR` is on, and exposes `office_*` LLM tools when `FEATURE_OFFICE_LLM_TOOLS` is on.
 
 ## Prerequisites
 
@@ -47,33 +47,49 @@ npm run rebuild:linux      # Clean + build
 ## Usage
 
 ```bash
-./dist/mono-cpp --help
-./dist/mono-cpp --version
-./dist/mono-cpp hello
-./dist/mono-cpp hello --name Developer
-./dist/mono-cpp config config.toml
-./dist/mono-cpp office parse-path Sheet1!A1:D10 --format xlsx
-./dist/mono-cpp office parse-selector 'cell[value>5000 and value<8000]'
-./dist/mono-cpp office package-list example.xlsx
-./dist/mono-cpp office package-read example.xlsx xl/workbook.xml
-./dist/mono-cpp office xlsx-info example.xlsx
-./dist/mono-cpp office get example.xlsx Sheet1!A1 --depth 1
-./dist/mono-cpp office get example.xlsx Sheet1!A1:D10 --depth 1
-./dist/mono-cpp office get example.xlsx /sheet[1]/cell[@ref=A1]
-./dist/mono-cpp office get example.xlsx /meta/core
-./dist/mono-cpp office query example.xlsx 'cell[value>5000]'
-./dist/mono-cpp office query example.xlsx 'sheet[name=Sheet1] > row[2] > cell'
-./dist/mono-cpp office query example.xlsx 'cell:has(formula)'
-./dist/mono-cpp office get example.docx /body/p[1]/r[1] --depth 1
-./dist/mono-cpp office get example.docx /meta/core
-./dist/mono-cpp office query example.docx 'paragraph[style=Heading1] > run[bold=true]'
+./dist/pm-office --help
+./dist/pm-office office help
+./dist/pm-office office parse-path Sheet1!A1:D10 --format xlsx
+./dist/pm-office office parse-selector 'cell[value>5000 and value<8000]'
+./dist/pm-office office package-list example.xlsx
+./dist/pm-office office package-read example.xlsx xl/workbook.xml
+./dist/pm-office office xlsx-info example.xlsx
+./dist/pm-office office get example.xlsx Sheet1!A1 --depth 1
+./dist/pm-office office get example.xlsx Sheet1!A1:D10 --depth 1
+./dist/pm-office office get example.xlsx /sheet[1]/cell[@ref=A1]
+./dist/pm-office office get example.xlsx /meta/core
+./dist/pm-office office query example.xlsx 'cell[value>5000]'
+./dist/pm-office office query example.xlsx 'sheet[name=Sheet1] > row[2] > cell'
+./dist/pm-office office query example.xlsx 'cell:has(formula)'
+./dist/pm-office office get example.docx /body/p[1]/r[1] --depth 1
+./dist/pm-office office get example.docx /meta/core
+./dist/pm-office office query example.docx 'paragraph[style=Heading1] > run[bold=true]'
 ```
+
+Edit commands print JSON on stdout (`{"ok":true,...}`) and exit 0. `view text` and `view outline` print plain text. Failures print the reason on stderr and exit 1. `--json` is accepted and changes nothing.
+
+```bash
+./dist/pm-office office create note.docx
+./dist/pm-office office add note.docx / --type paragraph --prop text=Hello --prop style=Heading1
+./dist/pm-office office view note.docx text
+./dist/pm-office office set note.docx /body/p[1] --prop bold=true
+./dist/pm-office office set note.docx / --find Hello --replace Hi
+./dist/pm-office office create book.xlsx
+./dist/pm-office office set book.xlsx Sheet1!A1 --prop value=Alice
+./dist/pm-office office create deck.pptx
+./dist/pm-office office add deck.pptx / --type slide --prop title=Deck
+```
+
+Supported add types: docx `paragraph`, `run`, `table`, `row`, `cell`; xlsx `sheet`, `row`, `cell`; pptx `slide`, `shape`. `move` and `swap` cover docx paragraphs and tables. Charts, pivots, raw XML, animations, watch, and HTML preview are not in this build; those commands exit 1.
+
+`npm test` runs `tests/test-edit.mjs`. `PM_OFFICE_CLI` overrides the executable path.
 
 ## Office Library API
 
 Production consumers should link the static `office` library and use typed ASTs directly:
 
 ```cpp
+#include "office_edit.h"
 #include "office_parser.h"
 #include "word_resolver.h"
 #include "xlsx_package.h"

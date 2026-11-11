@@ -1,7 +1,7 @@
 {
-  "name": "mono-cpp",
+  "name": "pm-office",
   "version": "0.1.0",
-  "description": "Minimal C++ CLI boilerplate with CMake.",
+  "description": "pm-office OOXML library and CLI.",
   "scripts": {
     "config": "cmake --preset dev",
     "config:release": "cmake --preset release",
@@ -18,9 +18,10 @@
     "rebuild:release": "npm run clean && npm run build:release",
     "rebuild:macos": "npm run clean && npm run build:macos",
     "rebuild:linux": "npm run clean && npm run build:linux",
-    "run": "./dist/mono-cpp --help",
-    "run:hello": "./dist/mono-cpp hello",
-    "test": "./dist/mono-cpp hello",
+    "run": "node -e \"process.exit(0)\"",
+    "run:help": "node tests/test-edit.mjs --help-only",
+    "test": "node tests/test-edit.mjs",
+    "test:hello": "node -e \"console.log('pm-office tests live in test-edit')\"",
     "test:office": "node tests/orchestrator/test-media.mjs --office-smoke-only",
     "install:linux": "bash scripts/install-lnx.sh",
     "install:macos": "bash osx/install.sh"

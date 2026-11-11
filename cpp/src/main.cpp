@@ -17,7 +17,7 @@
 #endif
 
 int main(int argc, char *argv[]) {
-    CLI::App app{"mono-cpp — C++ CLI Boilerplate", "mono-cpp"};
+    CLI::App app{"pm-office — OOXML create, read, and edit", "pm-office"};
     app.allow_windows_style_options(false);
     app.set_version_flag("-v,--version", PROJECT_VERSION);
 
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
     CLI11_PARSE(app, argc, argv);
 
     // Initialize logger
-    logger::init("mono-cpp", log_level);
+    logger::init("pm-office", log_level);
 
     if (hello_cmd->parsed()) {
         logger::info("Hello, " + name + "!");

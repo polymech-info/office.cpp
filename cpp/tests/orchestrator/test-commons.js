@@ -71,11 +71,12 @@ export function mediaExeCandidates(orchestratorDir) {
   return candidates;
 }
 
-/** Candidate locations for the mono-cpp executable used by office parser smoke tests. */
+/** Candidate locations for the pm-office executable used by office parser smoke tests. */
 export function officeExeCandidates(orchestratorDir) {
   const repoRoot = repoRootFromOrchestrator(orchestratorDir);
-  const exeName = process.platform === 'win32' ? 'mono-cpp.exe' : 'mono-cpp';
+  const exeName = process.platform === 'win32' ? 'pm-office.exe' : 'pm-office';
   const candidates = [];
+  if (process.env.PM_OFFICE_CLI) candidates.push(process.env.PM_OFFICE_CLI);
 
   candidates.push(resolve(repoRoot, 'dist', exeName));
   if (process.platform === 'win32') {
