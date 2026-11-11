@@ -77,4 +77,10 @@ EditResult documentQuery(const std::filesystem::path &file, std::string_view sel
 
 std::string documentFormat(const std::filesystem::path &file);
 
+// An agent run holds each document it touches. Tools share that copy, and the
+// file is written and unlocked when the run ends. Outside a run every call
+// saves before it returns.
+void beginAgentDocuments();
+void endAgentDocuments();
+
 } // namespace office

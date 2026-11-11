@@ -2,6 +2,7 @@
 
 #include "document_node.h"
 #include "office_markdown.h"
+#include "office_open_registry.hpp"
 #include "office_parser.h"
 #include "office_xml.hpp"
 #include "ooxml_zip.h"
@@ -12,9 +13,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <fstream>
 #include <initializer_list>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <utility>
@@ -262,6 +266,91 @@ struct Session {
         return &found->second;
     }
 };
+
+struct OpenSlot {
+    std::recursive_mutex mu;
+    Session session;
+    bool loaded = false;
+    bool dirty = false;
+    bool claimed = false;
+};
+
+struct AgentRegistry {
+    std::mutex mu;
+    int depth = 0;
+    std::map<std::string, std::shared_ptr<OpenSlot>> slots;
+};
+
+AgentRegistry &agent_registry() {
+    static AgentRegistry registry;
+    return registry;
+}
+
+std::string registry_key(const std::filesystem::path &file) {
+    std::error_code ec;
+    const auto canon = std::filesystem::weakly_canonical(file, ec);
+    return media::path::path_to_utf8(ec ? file : canon);
+}
+
+struct DocumentLease {
+    Session owned;
+    std::shared_ptr<OpenSlot> slot;
+    std::unique_lock<std::recursive_mutex> lock;
+    bool deferred = false;
+
+    Session *get() {
+        if (deferred) return slot && slot->loaded ? &slot->session : nullptr;
+        if (owned.format.empty() || !owned.error.empty()) return nullptr;
+        return &owned;
+    }
+
+    bool commit(std::string &error) {
+        if (deferred) {
+            if (slot) slot->dirty = true;
+            return true;
+        }
+        if (!owned.save()) {
+            error = owned.error;
+            return false;
+        }
+        return true;
+    }
+};
+
+DocumentLease open_lease(const std::filesystem::path &file, std::string &error) {
+    DocumentLease lease;
+    auto &reg = agent_registry();
+    std::unique_lock<std::mutex> reg_lock(reg.mu);
+    if (reg.depth <= 0) {
+        reg_lock.unlock();
+        lease.owned.file = file;
+        if (!lease.owned.load()) error = lease.owned.error;
+        return lease;
+    }
+    const auto key = registry_key(file);
+    auto &slot = reg.slots[key];
+    if (!slot) slot = std::make_shared<OpenSlot>();
+    lease.slot = slot;
+    lease.deferred = true;
+    reg_lock.unlock();
+    lease.lock = std::unique_lock<std::recursive_mutex>(lease.slot->mu);
+    if (lease.slot->loaded) return lease;
+    lease.slot->session.file = file;
+    if (!lease.slot->session.load()) {
+        error = lease.slot->session.error;
+        return lease;
+    }
+    if (!claim_open_path(key, error)) return lease;
+    lease.slot->claimed = true;
+    lease.slot->loaded = true;
+    return lease;
+}
+
+bool agent_hold_active() {
+    auto &reg = agent_registry();
+    std::lock_guard<std::mutex> lock(reg.mu);
+    return reg.depth > 0;
+}
 
 pugi::xml_node appendBeforeSect(pugi::xml_node body, const char *name) {
     auto sect = childByLocalName(body, "sectPr");
@@ -2743,6 +2832,27 @@ std::string documentFormat(const std::filesystem::path &file) {
     return {};
 }
 
+void beginAgentDocuments() {
+    auto &reg = agent_registry();
+    std::lock_guard<std::mutex> lock(reg.mu);
+    ++reg.depth;
+}
+
+void endAgentDocuments() {
+    auto &reg = agent_registry();
+    std::lock_guard<std::mutex> lock(reg.mu);
+    if (reg.depth <= 0) return;
+    if (--reg.depth > 0) return;
+    for (auto &[key, slot] : reg.slots) {
+        std::lock_guard<std::recursive_mutex> slot_lock(slot->mu);
+        if (slot->loaded && slot->dirty && !slot->session.save()) {
+            std::fprintf(stderr, "office: save failed: %s\n", slot->session.error.c_str());
+        }
+        if (slot->claimed) release_open_path(key);
+    }
+    reg.slots.clear();
+}
+
 EditResult markdownJson(const MarkdownDocument &doc) {
     if (!doc.ok) return fail(doc.error);
     std::ostringstream out;
@@ -2771,6 +2881,11 @@ EditResult createDocument(const std::filesystem::path &file) {
     else return fail("create needs a .docx, .xlsx, or .pptx path");
     std::string error;
     if (!writeOoxmlParts(file, parts, error)) return fail(error);
+    if (agent_hold_active()) {
+        std::string held_error;
+        auto lease = open_lease(file, held_error);
+        if (lease.get() == nullptr) return fail(held_error.empty() ? "failed to hold the new document" : held_error);
+    }
     return okJson("{\"ok\":true,\"format\":" + jstr(format) + ",\"path\":" + jstr(media::path::path_to_utf8(file)) + "}");
 }
 
@@ -2778,7 +2893,11 @@ EditResult viewDocument(const std::filesystem::path &file, std::string_view mode
     const auto format = documentFormat(file);
     const auto which = lower(std::string(mode.empty() ? "text" : mode));
     if (which == "markdown" || (isOpenDocument(format) && which == "text")) {
-        const auto doc = readMarkdown(file);
+        std::string error;
+        auto lease = open_lease(file, error);
+        Session *session = lease.get();
+        if (session == nullptr) return fail(error.empty() ? "failed to open document" : error);
+        const auto doc = markdownFromPackage(session->package, session->format);
         if (which == "text") {
             if (!doc.ok) return fail(doc.error);
             return plainText(doc.markdown);
@@ -2786,9 +2905,11 @@ EditResult viewDocument(const std::filesystem::path &file, std::string_view mode
         return markdownJson(doc);
     }
     if (isOpenDocument(format)) return fail("OpenDocument view supports text and markdown");
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (which == "text") {
         std::string text;
         if (session.format == "docx") {
@@ -2868,64 +2989,74 @@ EditResult viewDocument(const std::filesystem::path &file, std::string_view mode
 
 EditResult addElement(const std::filesystem::path &file, std::string_view parent, std::string_view type, const PropMap &props,
                       std::string_view after, std::string_view before, int index) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = addDocx(session, parent, type, props, after, before, index);
     else if (session.format == "xlsx") result = addXlsx(session, parent, type, props, index);
     else result = addPptx(session, parent, type, props);
     if (!result.ok) return result;
-    if (!session.save()) return fail(session.error);
+    if (!lease.commit(error)) return fail(error);
     return result;
 }
 
 EditResult setElement(const std::filesystem::path &file, std::string_view node, const PropMap &props, std::string_view find,
                       std::string_view replace_with) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = setDocx(session, node, props, find, replace_with);
     else if (session.format == "xlsx") result = setXlsx(session, node, props, find, replace_with);
     else result = setPptx(session, node, props, find, replace_with);
     if (!result.ok) return result;
-    if (!session.save()) return fail(session.error);
+    if (!lease.commit(error)) return fail(error);
     return result;
 }
 
 EditResult removeElement(const std::filesystem::path &file, std::string_view node) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = removeDocx(session, node);
     else if (session.format == "xlsx") result = removeXlsx(session, node);
     else result = removePptx(session, node);
     if (!result.ok) return result;
-    if (!session.save()) return fail(session.error);
+    if (!lease.commit(error)) return fail(error);
     return result;
 }
 
 EditResult moveElement(const std::filesystem::path &file, std::string_view node, std::string_view, std::string_view after,
                        std::string_view before, int index) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (session.format != "docx") return fail("move currently supports docx paragraphs and tables");
     auto result = moveDocx(session, node, after, before, index);
     if (!result.ok) return result;
-    if (!session.save()) return fail(session.error);
+    if (!lease.commit(error)) return fail(error);
     return result;
 }
 
 EditResult swapElements(const std::filesystem::path &file, std::string_view left, std::string_view right) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (session.format != "docx") return fail("swap currently supports docx paragraphs and tables");
     pugi::xml_document doc;
     if (!loadPart(session, "word/document.xml", doc)) return fail(session.error);
@@ -2946,14 +3077,16 @@ EditResult swapElements(const std::filesystem::path &file, std::string_view left
     parent.insert_move_before(b.parent, marker);
     parent.remove_child(marker);
     storePart(session, "word/document.xml", doc);
-    if (!session.save()) return fail(session.error);
+    if (!lease.commit(error)) return fail(error);
     return okJson("{\"ok\":true,\"format\":\"docx\",\"swapped\":[" + jstr(left) + "," + jstr(right) + "]}");
 }
 
 EditResult validateDocument(const std::filesystem::path &file) {
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     if (isOpenDocument(session.format)) {
         if (!session.part("content.xml")) return fail("missing content.xml");
         return okJson("{\"ok\":true,\"format\":" + jstr(session.format) + ",\"parts\":" + std::to_string(session.package.parts.size()) + "}");
@@ -2969,9 +3102,11 @@ EditResult runBatch(const std::filesystem::path &file, const std::vector<BatchOp
     std::ostringstream out;
     out << "{\"results\":[";
     bool all_ok = true;
-    Session session;
-    session.file = file;
-    if (!session.load()) return fail(session.error);
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
     bool dirty = false;
     for (std::size_t i = 0; i < ops.size(); ++i) {
         const auto command = lower(ops[i].command);
@@ -2992,15 +3127,15 @@ EditResult runBatch(const std::filesystem::path &file, const std::vector<BatchOp
             else result = removePptx(session, ops[i].path);
             if (result.ok) dirty = true;
         } else if (command == "view") {
-            if (dirty && !session.save()) return fail(session.error);
+            if (dirty && !lease.commit(error)) return fail(error);
             dirty = false;
             result = viewDocument(file, ops[i].mode.empty() ? "text" : ops[i].mode);
         } else if (command == "get") {
-            if (dirty && !session.save()) return fail(session.error);
+            if (dirty && !lease.commit(error)) return fail(error);
             dirty = false;
             result = documentGet(file, ops[i].path.empty() ? "/" : ops[i].path, 1);
         } else if (command == "query") {
-            if (dirty && !session.save()) return fail(session.error);
+            if (dirty && !lease.commit(error)) return fail(error);
             dirty = false;
             result = documentQuery(file, ops[i].path);
         } else {
@@ -3013,7 +3148,7 @@ EditResult runBatch(const std::filesystem::path &file, const std::vector<BatchOp
             if (stop_on_error) break;
         }
     }
-    if (dirty && !session.save()) return fail(session.error);
+    if (dirty && !lease.commit(error)) return fail(error);
     out << "],\"ok\":" << (all_ok ? "true" : "false") << "}";
     EditResult result;
     result.ok = all_ok;
@@ -3075,26 +3210,25 @@ EditResult runBatchJson(const std::filesystem::path &file, std::string_view json
 }
 
 EditResult documentGet(const std::filesystem::path &file, std::string_view node, int depth) {
-    const auto format = documentFormat(file);
-    if (format.empty()) return fail("unsupported document extension");
-    if (isOpenDocument(format)) {
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
+    if (isOpenDocument(session.format)) {
         if (!node.empty() && node != "/") return fail("OpenDocument path get is not implemented; use view markdown");
-        return markdownJson(readMarkdown(file));
+        return markdownJson(markdownFromPackage(session.package, session.format));
     }
-    if (format == "pptx") {
-        Session session;
-        session.file = file;
-        if (!session.load()) return fail(session.error);
-        std::string error;
+    if (session.format == "pptx") {
         auto doc = pptxNode(session, node, depth, error);
         if (!error.empty()) return fail(error);
         return okJson(toJson(doc));
     }
     try {
-        XlsxPackage package(file);
-        auto parsed = parser::parsePath(node.empty() ? "/" : node, format);
+        XlsxPackage package(file, &session.package.parts);
+        auto parsed = parser::parsePath(node.empty() ? "/" : node, session.format);
         if (!parsed.ok) return fail(parsed.error);
-        ResolveResult result = format == "docx" ? resolveWordGet(package, parsed.ast, depth) : resolveXlsxGet(package, parsed.ast, depth);
+        ResolveResult result = session.format == "docx" ? resolveWordGet(package, parsed.ast, depth) : resolveXlsxGet(package, parsed.ast, depth);
         if (!result.ok) return fail(result.error);
         return okJson(toJson(result.node));
     } catch (const std::exception &ex) {
@@ -3103,23 +3237,22 @@ EditResult documentGet(const std::filesystem::path &file, std::string_view node,
 }
 
 EditResult documentQuery(const std::filesystem::path &file, std::string_view selector_text) {
-    const auto format = documentFormat(file);
-    if (format.empty()) return fail("unsupported document extension");
-    if (isOpenDocument(format)) return fail("OpenDocument query is not implemented; use view markdown");
+    std::string error;
+    auto lease = open_lease(file, error);
+    Session *held = lease.get();
+    if (held == nullptr) return fail(error.empty() ? "failed to open document" : error);
+    Session &session = *held;
+    if (isOpenDocument(session.format)) return fail("OpenDocument query is not implemented; use view markdown");
     auto parsed = parser::parseSelector(selector_text);
     if (!parsed.ok) return fail(parsed.error);
-    if (format == "pptx") {
-        Session session;
-        session.file = file;
-        if (!session.load()) return fail(session.error);
-        std::string error;
+    if (session.format == "pptx") {
         auto doc = pptxQuery(session, parsed.ast, error);
         if (!error.empty()) return fail(error);
         return okJson(toJson(doc));
     }
     try {
-        XlsxPackage package(file);
-        ResolveResult result = format == "docx" ? resolveWordQuery(package, parsed.ast) : resolveXlsxQuery(package, parsed.ast);
+        XlsxPackage package(file, &session.package.parts);
+        ResolveResult result = session.format == "docx" ? resolveWordQuery(package, parsed.ast) : resolveXlsxQuery(package, parsed.ast);
         if (!result.ok) return fail(result.error);
         return okJson(toJson(result.node));
     } catch (const std::exception &ex) {

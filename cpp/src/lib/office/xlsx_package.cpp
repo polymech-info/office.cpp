@@ -60,18 +60,27 @@ private:
 
 XlsxPackage::XlsxPackage(std::filesystem::path path) : path_(std::move(path)) {}
 
+XlsxPackage::XlsxPackage(std::filesystem::path path, const std::map<std::string, std::string> *memory)
+    : path_(std::move(path)), memory_(memory) {}
+
 const std::filesystem::path &XlsxPackage::path() const {
     return path_;
 }
 
 bool XlsxPackage::hasPart(std::string_view part_name) const {
     auto name = normalizePartName(part_name);
+    if (memory_ != nullptr) return memory_->find(name) != memory_->end();
     ZipReader reader(path_);
     return mz_zip_reader_locate_entry(reader.get(), name.c_str(), 0) == MZ_OK;
 }
 
 std::optional<std::string> XlsxPackage::readText(std::string_view part_name) const {
     auto name = normalizePartName(part_name);
+    if (memory_ != nullptr) {
+        auto found = memory_->find(name);
+        if (found == memory_->end()) return std::nullopt;
+        return found->second;
+    }
     ZipReader reader(path_);
     if (mz_zip_reader_locate_entry(reader.get(), name.c_str(), 0) != MZ_OK) {
         return std::nullopt;
@@ -106,6 +115,12 @@ std::optional<std::string> XlsxPackage::readText(std::string_view part_name) con
 }
 
 std::vector<std::string> XlsxPackage::listParts() const {
+    if (memory_ != nullptr) {
+        std::vector<std::string> parts;
+        parts.reserve(memory_->size());
+        for (const auto &[name, bytes] : *memory_) parts.push_back(name);
+        return parts;
+    }
     ZipReader reader(path_);
     std::vector<std::string> parts;
     int32_t err = mz_zip_reader_goto_first_entry(reader.get());

@@ -139,6 +139,7 @@ add_library(office STATIC
     src/lib/office/document_node.cpp
     src/lib/office/office_edit.cpp
     src/lib/office/office_markdown.cpp
+    src/lib/office/office_open_registry.cpp
     src/lib/office/office_parser.cpp
     src/lib/office/ooxml_metadata.cpp
     src/lib/office/ooxml_zip.cpp

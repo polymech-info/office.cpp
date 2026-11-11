@@ -1,5 +1,5 @@
 {
-  "name": "pm-office",
+  "name": "@polymech/office",
   "version": "0.1.0",
   "description": "pm-office OOXML library and CLI.",
   "scripts": {

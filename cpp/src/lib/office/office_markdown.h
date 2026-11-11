@@ -20,7 +20,10 @@ struct MarkdownDocument {
     std::vector<MarkdownCell> cells;
 };
 
+struct OoxmlParts;
+
 // Markdown for docx, xlsx, pptx, odt, ods, and odp. Spreadsheets also fill cells.
 MarkdownDocument readMarkdown(const std::filesystem::path &file);
+MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format);
 
 } // namespace office

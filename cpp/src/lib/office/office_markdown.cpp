@@ -501,7 +501,9 @@ bool loadXml(const std::string &xml, pugi::xml_document &doc) {
     return static_cast<bool>(doc.load_string(xml.c_str(), pugi::parse_default | pugi::parse_ws_pcdata));
 }
 
-MarkdownDocument fromPackage(const OoxmlParts &package, const std::string &format) {
+} // namespace
+
+MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format) {
     MarkdownDocument result;
     result.format = format;
     Writer writer;
@@ -536,15 +538,13 @@ MarkdownDocument fromPackage(const OoxmlParts &package, const std::string &forma
     return result;
 }
 
-} // namespace
-
 MarkdownDocument readMarkdown(const std::filesystem::path &file) {
     const auto format = documentFormat(file);
     if (format.empty()) return {false, "unsupported document extension", {}, {}, {}};
     std::string error;
     const auto package = readOoxmlParts(file, error);
     if (!error.empty()) return {false, error, format, {}, {}};
-    return fromPackage(package, format);
+    return markdownFromPackage(package, format);
 }
 
 } // namespace office

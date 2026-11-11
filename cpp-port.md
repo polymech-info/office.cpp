@@ -22,6 +22,21 @@ Read-only for now. The package is still a zip; the office library already reads 
 - [ ] Embed a picture: package part plus `manifest:file-entry` plus `draw:image`.
 - [ ] Markdown still to add from the anydoc reader: style cascade, resolved list numbers, MathML, footnotes, image alt text, and ODS covered cells / form checkboxes.
 
+## Spreadsheet formulas
+
+A formula is the cell expression plus a cached result (`table:formula` and `office:value` / `text:p` in ods, `<f>` and `<v>` in xlsx). ods has no recalculate-on-open flag, so a write that leaves the cached result shows the old number. Reference: `ref/OpenDocument.core/src/odr/internal/formula/` and `docs/design/spreadsheet-editing.md`. Not ported.
+
+- [ ] Parse OpenFormula (`of:=...`) and OOXML formulas into one tree.
+- [ ] Build the dependency map once per open document. A cell write drops the cached result of formulas that read that cell. A formula that does not parse keeps its cache.
+- [ ] Recalculate supported formulas when the agent run saves. Until then, a formula cell is stored and returned as the expression, not a computed value.
+- [ ] xlsx save sets `calcPr/@fullCalcOnLoad` when a formula input changes. ods has no equivalent switch.
+- [ ] Leave the formula wasm module, localized function names, and array-formula spills in the reference.
+
+## Agent document hold
+
+- [x] While an agent run is active, office tools keep each document in a process registry and claim its path in a shared memory-mapped table (`pm-office-open.registry`). The file is written and the claim released when the run ends. A second process waits, then fails the claim if the pid is still alive. A dead pid's slot can be taken.
+- [ ] A crash before the run ends drops the unsaved edits. The next open reclaims the slot.
+
 ## Current Boilerplate Decisions
 
 - [x] Use C++20 for the C++ port (`cpp/CMakeLists.txt`).
