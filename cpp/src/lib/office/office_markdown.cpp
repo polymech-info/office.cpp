@@ -60,6 +60,35 @@ void appendPcdata(pugi::xml_node node, std::string &out) {
             out += child.value();
             continue;
         }
+        if (localNameEquals(child.name(), "instrText") || localNameEquals(child.name(), "delInstrText")) {
+            continue;
+        }
+        if (localNameEquals(child.name(), "a")) {
+            const auto href = attrByLocalName(child, "href");
+            std::string label;
+            appendPcdata(child, label);
+            if (href.empty() || href.rfind("javascript:", 0) == 0) {
+                out += label;
+                continue;
+            }
+            std::string safeHref;
+            safeHref.reserve(href.size());
+            for (unsigned char c : href) {
+                if (c == '(') safeHref += "%28";
+                else if (c == ')') safeHref += "%29";
+                else if (c == ' ' || c == '\n' || c == '\r') safeHref += "%20";
+                else safeHref.push_back(static_cast<char>(c));
+            }
+            out.push_back('[');
+            for (char c : label) {
+                if (c == '\n' || c == '\r') out.push_back(' ');
+                else if (c != '[' && c != ']') out.push_back(c);
+            }
+            out += "](";
+            out += safeHref;
+            out.push_back(')');
+            continue;
+        }
         if (localNameEquals(child.name(), "tab")) {
             out.push_back('\t');
             continue;
@@ -148,12 +177,20 @@ struct Writer {
     std::string str() const { return out.str(); }
 };
 
+bool toggleOn(pugi::xml_node props, const char *name) {
+    auto node = childByLocalName(props, name);
+    if (!node) return false;
+    const auto val = lower(attrByLocalName(node, "val"));
+    return val != "0" && val != "false" && val != "off" && val != "none";
+}
+
 std::string docxRunText(pugi::xml_node run) {
     std::string text;
     appendPcdata(run, text);
     if (trimmed(text).empty()) return {};
-    const bool bold = static_cast<bool>(childByLocalName(childByLocalName(run, "rPr"), "b"));
-    const bool italic = static_cast<bool>(childByLocalName(childByLocalName(run, "rPr"), "i"));
+    const auto props = childByLocalName(run, "rPr");
+    const bool bold = toggleOn(props, "b") || toggleOn(props, "bCs");
+    const bool italic = toggleOn(props, "i") || toggleOn(props, "iCs");
     if (italic) text = "*" + text + "*";
     if (bold) text = "**" + text + "**";
     return text;
@@ -398,6 +435,8 @@ void renderOdfBlocks(pugi::xml_node parent, Writer &writer) {
                 }
                 writer.bullet(text);
             }
+        } else if (localNameEquals(child.name(), "section")) {
+            renderOdfBlocks(child, writer);
         } else if (localNameEquals(child.name(), "table")) {
             std::vector<std::vector<std::string>> rows;
             int row_count = 0;
