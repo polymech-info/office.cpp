@@ -82,6 +82,8 @@ Edit commands print JSON on stdout (`{"ok":true,...}`) and exit 0. `view text` a
 
 Supported add types: docx `paragraph`, `run`, `table`, `row`, `cell`; xlsx `sheet`, `row`, `cell`; pptx `slide`, `shape`, `picture`. Slide `background` and `transition`, and shape `animation` (`fade-entrance-500`, `fly`, `zoom`, `wipe`, and the other entrance/exit effects), are properties of `set`. `move` and `swap` cover docx paragraphs and tables. Charts, pivots, raw XML, morph, emphasis animations, and HTML preview are not in this build; those commands exit 1.
 
+`view markdown` reads `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, and `.odp`. The JSON result has `markdown` and, for spreadsheets, `cells`. `view text` on an OpenDocument file prints that markdown. Create and edit of `.odt`, `.ods`, and `.odp` are not implemented; see the todo list in `packages/office/cpp-port.md`.
+
 `npm test` runs `tests/test-edit.mjs`. `PM_OFFICE_CLI` overrides the executable path.
 
 ## Office Library API

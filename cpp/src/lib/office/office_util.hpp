@@ -55,4 +55,8 @@ inline std::string jsonEscape(std::string_view input) {
 
 inline std::string jstr(std::string_view value) { return "\"" + jsonEscape(value) + "\""; }
 
+inline bool isOpenDocument(std::string_view format) {
+    return format == "odt" || format == "ods" || format == "odp";
+}
+
 } // namespace office

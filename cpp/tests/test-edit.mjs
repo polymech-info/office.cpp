@@ -4,7 +4,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { inflateRawSync } from 'node:zlib';
+import { crc32, inflateRawSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,6 +70,46 @@ function zipEntries(file) {
   return entries;
 }
 
+function writeStoredZip(file, entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, text] of entries) {
+    const nameBytes = Buffer.from(name);
+    const data = Buffer.from(text);
+    const crc = crc32(data) >>> 0;
+    const local = Buffer.alloc(30 + nameBytes.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    nameBytes.copy(local, 30);
+    locals.push(local, data);
+    const central = Buffer.alloc(46 + nameBytes.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE(offset, 42);
+    nameBytes.copy(central, 46);
+    centrals.push(central);
+    offset += local.length + data.length;
+  }
+  const centralBytes = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBytes.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  writeFileSync(file, Buffer.concat([...locals, centralBytes, eocd]));
+}
+
 function expectJson(args) {
   const result = expectOk(args);
   let json;
@@ -102,6 +142,10 @@ try {
   const second = expectJson(['office', 'add', docx, '/', '--type', 'paragraph', '--prop', 'text=Second']);
   const viewed = expectOk(['office', 'view', docx, 'text']);
   if (!viewed.stdout.includes('Hello') || !viewed.stdout.includes('Second')) fail('view text', viewed);
+  const docxMarkdown = expectJson(['office', 'view', docx, 'markdown']);
+  if (!docxMarkdown.markdown.includes('# Hello') || !docxMarkdown.markdown.includes('Second')) {
+    fail('docx markdown', { status: 0, stdout: JSON.stringify(docxMarkdown), stderr: '' });
+  }
   const outline = expectOk(['office', 'view', docx, 'outline']);
   if (!outline.stdout.includes('Heading1')) fail('outline style', outline);
   expectJson(['office', 'set', docx, first.path, '--prop', 'bold=true']);
@@ -137,6 +181,11 @@ try {
   expectJson(['office', 'add', xlsx, '/', '--type', 'sheet', '--prop', 'name=Data']);
   const sheets = expectOk(['office', 'view', xlsx, 'outline']);
   if (!sheets.stdout.includes('Data')) fail('xlsx sheet', sheets);
+  const xlsxMarkdown = expectJson(['office', 'view', xlsx, 'markdown']);
+  const alice = (xlsxMarkdown.cells || []).find((cell) => cell.ref === 'A1' && cell.value === 'Alice');
+  if (!xlsxMarkdown.markdown.includes('Alice') || !alice) {
+    fail('xlsx markdown cells', { status: 0, stdout: JSON.stringify(xlsxMarkdown), stderr: '' });
+  }
 
   const pptx = resolve(dir, 'deck.pptx');
   expectJson(['office', 'create', pptx]);
@@ -166,6 +215,43 @@ try {
   }
   if (!packed.has('ppt/media/image1.png')) fail('pptx media part missing');
   expectJson(['office', 'validate', pptx]);
+
+  const odfNs = 'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"';
+  const odt = resolve(dir, 'note.odt');
+  writeStoredZip(odt, [
+    ['mimetype', 'application/vnd.oasis.opendocument.text'],
+    ['content.xml', `<office:document-content ${odfNs}><office:body><office:text><text:h text:outline-level="1">Title</text:h><text:p>Hello ODT</text:p><text:list><text:list-item><text:p>Item</text:p></text:list-item></text:list></office:text></office:body></office:document-content>`],
+  ]);
+  const odtView = expectJson(['office', 'view', odt, 'markdown']);
+  if (!odtView.markdown.includes('# Title') || !odtView.markdown.includes('Hello ODT') || !odtView.markdown.includes('- Item')) {
+    fail('odt markdown', { status: 0, stdout: JSON.stringify(odtView), stderr: '' });
+  }
+  const odtGet = expectJson(['office', 'get', odt, '/']);
+  if (!odtGet.markdown.includes('Hello ODT')) fail('odt get', { status: 0, stdout: JSON.stringify(odtGet), stderr: '' });
+  const odtCreate = run(['office', 'create', resolve(dir, 'new.odt')]);
+  if (odtCreate.status === 0) fail('odt create should be unimplemented', odtCreate);
+
+  const ods = resolve(dir, 'book.ods');
+  writeStoredZip(ods, [
+    ['mimetype', 'application/vnd.oasis.opendocument.spreadsheet'],
+    ['content.xml', `<office:document-content ${odfNs}><office:body><office:spreadsheet><table:table table:name="Data"><table:table-row><table:table-cell office:value-type="string"><text:p>Alice</text:p></table:table-cell><table:table-cell office:value-type="float" office:value="3"><text:p>3</text:p></table:table-cell></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>`],
+  ]);
+  const odsView = expectJson(['office', 'view', ods, 'markdown']);
+  const odsAlice = (odsView.cells || []).find((cell) => cell.sheet === 'Data' && cell.ref === 'A1' && cell.value === 'Alice');
+  const odsNumber = (odsView.cells || []).find((cell) => cell.ref === 'B1' && cell.value === '3');
+  if (!odsAlice || !odsNumber || !odsView.markdown.includes('Alice')) {
+    fail('ods cells', { status: 0, stdout: JSON.stringify(odsView), stderr: '' });
+  }
+
+  const odp = resolve(dir, 'deck.odp');
+  writeStoredZip(odp, [
+    ['mimetype', 'application/vnd.oasis.opendocument.presentation'],
+    ['content.xml', `<office:document-content ${odfNs}><office:body><office:presentation><draw:page draw:name="Intro"><draw:frame><draw:text-box><text:p>Slide hello</text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>`],
+  ]);
+  const odpView = expectJson(['office', 'view', odp, 'markdown']);
+  if (!odpView.markdown.includes('Intro') || !odpView.markdown.includes('Slide hello')) {
+    fail('odp markdown', { status: 0, stdout: JSON.stringify(odpView), stderr: '' });
+  }
 
   const exists = run(['office', 'create', docx]);
   if (exists.status === 0) fail('create should fail when the file exists', exists);

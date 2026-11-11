@@ -67,8 +67,8 @@ const char *editHelp(const std::string &topic) {
                "paths: /slide[1], /slide[1]/shape[1], /slide[1]/picture[1]\n";
     }
     return "pm-office edit commands: create, add, set, remove, move, swap, view, batch, validate, get, query\n"
-           "formats: docx, xlsx, pptx\n"
-           "view modes: text, outline, stats\n"
+           "formats: docx, xlsx, pptx; odt, ods, odp are read-only (view markdown)\n"
+           "view modes: text, outline, stats, markdown\n"
            "charts, pivots, raw XML, morph, emphasis animations, and HTML preview are not in this build\n"
            "try: pm-office office help docx|xlsx|pptx\n";
 }
@@ -189,7 +189,8 @@ int OfficeCliCommands::run() const {
             result = resolveWordGet(package, parsed_path.ast, get_depth);
         } else if (is_xlsx) {
             result = resolveXlsxGet(package, parsed_path.ast, get_depth);
-        } else if (endsWithCi(get_file, ".pptx")) {
+        } else if (endsWithCi(get_file, ".pptx") || endsWithCi(get_file, ".odt")
+                   || endsWithCi(get_file, ".ods") || endsWithCi(get_file, ".odp")) {
             return printEdit(documentGet(get_file, get_path, get_depth));
         } else {
             std::cerr << "office get failed: unsupported document extension\n";
@@ -217,7 +218,8 @@ int OfficeCliCommands::run() const {
             result = resolveWordQuery(package, parsed_selector.ast);
         } else if (is_xlsx) {
             result = resolveXlsxQuery(package, parsed_selector.ast);
-        } else if (endsWithCi(query_file, ".pptx")) {
+        } else if (endsWithCi(query_file, ".pptx") || endsWithCi(query_file, ".odt")
+                   || endsWithCi(query_file, ".ods") || endsWithCi(query_file, ".odp")) {
             return printEdit(documentQuery(query_file, selector));
         } else {
             std::cerr << "office query failed: unsupported document extension\n";

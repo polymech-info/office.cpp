@@ -1,6 +1,7 @@
 #include "office_edit.h"
 
 #include "document_node.h"
+#include "office_markdown.h"
 #include "office_parser.h"
 #include "office_xml.hpp"
 #include "ooxml_zip.h"
@@ -2736,7 +2737,26 @@ std::string documentFormat(const std::filesystem::path &file) {
     if (ext == ".docx") return "docx";
     if (ext == ".xlsx") return "xlsx";
     if (ext == ".pptx") return "pptx";
+    if (ext == ".odt") return "odt";
+    if (ext == ".ods") return "ods";
+    if (ext == ".odp") return "odp";
     return {};
+}
+
+EditResult markdownJson(const MarkdownDocument &doc) {
+    if (!doc.ok) return fail(doc.error);
+    std::ostringstream out;
+    out << "{\"ok\":true,\"format\":" << jstr(doc.format)
+        << ",\"markdown\":" << jstr(doc.markdown)
+        << ",\"cells\":[";
+    for (std::size_t i = 0; i < doc.cells.size(); ++i) {
+        if (i) out << ',';
+        out << "{\"sheet\":" << jstr(doc.cells[i].sheet)
+            << ",\"ref\":" << jstr(doc.cells[i].ref)
+            << ",\"value\":" << jstr(doc.cells[i].value) << '}';
+    }
+    out << "]}";
+    return okJson(out.str());
 }
 
 EditResult createDocument(const std::filesystem::path &file) {
@@ -2744,6 +2764,7 @@ EditResult createDocument(const std::filesystem::path &file) {
     if (std::filesystem::exists(file, ec)) return fail("file already exists: " + media::path::path_to_utf8(file));
     const auto format = documentFormat(file);
     OoxmlParts parts;
+    if (isOpenDocument(format)) return fail("OpenDocument create is not implemented");
     if (format == "docx") parts = blankDocx();
     else if (format == "xlsx") parts = blankXlsx();
     else if (format == "pptx") parts = blankPptx();
@@ -2754,10 +2775,20 @@ EditResult createDocument(const std::filesystem::path &file) {
 }
 
 EditResult viewDocument(const std::filesystem::path &file, std::string_view mode) {
+    const auto format = documentFormat(file);
+    const auto which = lower(std::string(mode.empty() ? "text" : mode));
+    if (which == "markdown" || (isOpenDocument(format) && which == "text")) {
+        const auto doc = readMarkdown(file);
+        if (which == "text") {
+            if (!doc.ok) return fail(doc.error);
+            return plainText(doc.markdown);
+        }
+        return markdownJson(doc);
+    }
+    if (isOpenDocument(format)) return fail("OpenDocument view supports text and markdown");
     Session session;
     session.file = file;
     if (!session.load()) return fail(session.error);
-    const auto which = lower(std::string(mode));
     if (which == "text") {
         std::string text;
         if (session.format == "docx") {
@@ -2832,7 +2863,7 @@ EditResult viewDocument(const std::filesystem::path &file, std::string_view mode
                       ",\"sheets\":" + std::to_string(sheets) +
                       ",\"slides\":" + std::to_string(slides) + "}");
     }
-    return fail("view mode must be text, outline, or stats");
+    return fail("view mode must be text, outline, stats, or markdown");
 }
 
 EditResult addElement(const std::filesystem::path &file, std::string_view parent, std::string_view type, const PropMap &props,
@@ -2840,6 +2871,7 @@ EditResult addElement(const std::filesystem::path &file, std::string_view parent
     Session session;
     session.file = file;
     if (!session.load()) return fail(session.error);
+    if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = addDocx(session, parent, type, props, after, before, index);
     else if (session.format == "xlsx") result = addXlsx(session, parent, type, props, index);
@@ -2854,6 +2886,7 @@ EditResult setElement(const std::filesystem::path &file, std::string_view node, 
     Session session;
     session.file = file;
     if (!session.load()) return fail(session.error);
+    if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = setDocx(session, node, props, find, replace_with);
     else if (session.format == "xlsx") result = setXlsx(session, node, props, find, replace_with);
@@ -2867,6 +2900,7 @@ EditResult removeElement(const std::filesystem::path &file, std::string_view nod
     Session session;
     session.file = file;
     if (!session.load()) return fail(session.error);
+    if (isOpenDocument(session.format)) return fail("OpenDocument editing is not implemented");
     EditResult result = fail("unsupported format");
     if (session.format == "docx") result = removeDocx(session, node);
     else if (session.format == "xlsx") result = removeXlsx(session, node);
@@ -2920,6 +2954,10 @@ EditResult validateDocument(const std::filesystem::path &file) {
     Session session;
     session.file = file;
     if (!session.load()) return fail(session.error);
+    if (isOpenDocument(session.format)) {
+        if (!session.part("content.xml")) return fail("missing content.xml");
+        return okJson("{\"ok\":true,\"format\":" + jstr(session.format) + ",\"parts\":" + std::to_string(session.package.parts.size()) + "}");
+    }
     const char *main_part = session.format == "docx" ? "word/document.xml" : session.format == "xlsx" ? "xl/workbook.xml" : "ppt/presentation.xml";
     pugi::xml_document doc;
     if (!loadPart(session, main_part, doc)) return fail(session.error);
@@ -3039,6 +3077,10 @@ EditResult runBatchJson(const std::filesystem::path &file, std::string_view json
 EditResult documentGet(const std::filesystem::path &file, std::string_view node, int depth) {
     const auto format = documentFormat(file);
     if (format.empty()) return fail("unsupported document extension");
+    if (isOpenDocument(format)) {
+        if (!node.empty() && node != "/") return fail("OpenDocument path get is not implemented; use view markdown");
+        return markdownJson(readMarkdown(file));
+    }
     if (format == "pptx") {
         Session session;
         session.file = file;
@@ -3063,6 +3105,7 @@ EditResult documentGet(const std::filesystem::path &file, std::string_view node,
 EditResult documentQuery(const std::filesystem::path &file, std::string_view selector_text) {
     const auto format = documentFormat(file);
     if (format.empty()) return fail("unsupported document extension");
+    if (isOpenDocument(format)) return fail("OpenDocument query is not implemented; use view markdown");
     auto parsed = parser::parseSelector(selector_text);
     if (!parsed.ok) return fail(parsed.error);
     if (format == "pptx") {

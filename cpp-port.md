@@ -9,6 +9,18 @@ Scope: parser plus the C++ edit slice for docx, xlsx, and pptx (`create`, `view`
 - [x] docx: paragraph, run, table, row, cell. xlsx: sheet, row, cell. pptx: slide, shape.
 - [x] Host LLM tools `office_*` behind `FEATURE_OFFICE_LLM_TOOLS`, including the Android agent stack.
 - [ ] Charts, pivots, raw XML, `--after find:`, docx `@paraId` edits, xlsx column insert, and move/swap outside docx paragraphs and tables.
+- [x] Read `.odt`, `.ods`, and `.odp` as markdown. Spreadsheets (`xlsx` and `ods`) also return `cells` (`sheet`, `ref`, `value`) from `view markdown` and `get /`.
+- [x] Search text for docx/xlsx/pptx and odt/ods/odp comes from that markdown reader. The OpenDocument adapter no longer calls anydoc.
+
+## OpenDocument write
+
+Read-only for now. The package is still a zip; the office library already reads deflate parts, so this does not move zip code into commons (`zip_store` there is stored-only).
+
+- [ ] Create a minimal `.odt`: uncompressed `mimetype` first, then `META-INF/manifest.xml`, `content.xml`, and `styles.xml`.
+- [ ] Create a minimal `.ods` sheet and `.odp` slide the same way.
+- [ ] Edit `content.xml` in place: odt `text:p` / `text:h` / `table:table`, ods `table:table-cell` (`office:value` and `text:p`), odp `draw:page` / `draw:frame` / `draw:text-box`.
+- [ ] Embed a picture: package part plus `manifest:file-entry` plus `draw:image`.
+- [ ] Markdown still to add from the anydoc reader: style cascade, resolved list numbers, MathML, footnotes, image alt text, and ODS covered cells / form checkboxes.
 
 ## Current Boilerplate Decisions
 
