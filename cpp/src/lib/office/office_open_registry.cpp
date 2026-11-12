@@ -32,6 +32,27 @@ constexpr std::uint32_t k_version = 1u;
 constexpr int k_slots = 48;
 constexpr std::size_t k_path_cap = 1024;
 
+// libc++ in the Android NDK does not provide std::atomic_ref. The spin word
+// stays a plain uint32 so the mapped table layout matches desktop.
+#if defined(__cpp_lib_atomic_ref) && __cpp_lib_atomic_ref >= 201806L
+constexpr std::size_t k_spin_align = std::atomic_ref<std::uint32_t>::required_alignment;
+inline bool spin_cas(std::uint32_t &slot, std::uint32_t &expected, std::uint32_t desired) {
+    return std::atomic_ref<std::uint32_t>(slot).compare_exchange_weak(
+        expected, desired, std::memory_order_acq_rel, std::memory_order_relaxed);
+}
+inline void spin_clear(std::uint32_t &slot) {
+    std::atomic_ref<std::uint32_t>(slot).store(0, std::memory_order_release);
+}
+#else
+constexpr std::size_t k_spin_align = alignof(std::uint32_t);
+inline bool spin_cas(std::uint32_t &slot, std::uint32_t &expected, std::uint32_t desired) {
+    return __atomic_compare_exchange_n(&slot, &expected, desired, true, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);
+}
+inline void spin_clear(std::uint32_t &slot) {
+    __atomic_store_n(&slot, 0u, __ATOMIC_RELEASE);
+}
+#endif
+
 struct Slot {
     std::uint32_t state = 0;
     std::uint32_t pid = 0;
@@ -41,7 +62,7 @@ struct Slot {
 struct Table {
     std::uint32_t magic = 0;
     std::uint32_t version = 0;
-    alignas(std::atomic_ref<std::uint32_t>::required_alignment) std::uint32_t spin = 0;
+    alignas(k_spin_align) std::uint32_t spin = 0;
     Slot slots[k_slots]{};
 };
 
@@ -137,14 +158,12 @@ Mapping &mapping() {
 }
 
 bool lock_table(Table &table, std::string &error) {
-    std::atomic_ref<std::uint32_t> spin(table.spin);
     const auto pid = self_pid();
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     for (;;) {
         std::uint32_t expected = 0;
-        if (spin.compare_exchange_weak(expected, pid, std::memory_order_acq_rel, std::memory_order_relaxed)) break;
-        if (expected != pid && !pid_alive(expected) &&
-            spin.compare_exchange_weak(expected, pid, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+        if (spin_cas(table.spin, expected, pid)) break;
+        if (expected != pid && !pid_alive(expected) && spin_cas(table.spin, expected, pid)) {
             break;
         }
         if (std::chrono::steady_clock::now() > deadline) {
@@ -164,7 +183,7 @@ bool lock_table(Table &table, std::string &error) {
 }
 
 void unlock_table(Table &table) {
-    std::atomic_ref<std::uint32_t>(table.spin).store(0, std::memory_order_release);
+    spin_clear(table.spin);
 }
 
 struct TableLock {

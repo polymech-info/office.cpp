@@ -1,10 +1,11 @@
 # Build output
 /build/
-
+/dist/
 # Compiled objects
 *.o
 *.obj
 *.exe
+*.pdb
 *.out
 *.app
 config/

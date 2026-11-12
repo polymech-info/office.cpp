@@ -2823,9 +2823,9 @@ std::string jsonText(const JsonVal &value) {
 
 std::string documentFormat(const std::filesystem::path &file) {
     const auto ext = media::strutil::path_ext_lower(media::path::path_to_utf8(file));
-    if (ext == ".docx") return "docx";
-    if (ext == ".xlsx") return "xlsx";
-    if (ext == ".pptx") return "pptx";
+    if (ext == ".docx" || ext == ".docm") return "docx";
+    if (ext == ".xlsx" || ext == ".xlsm") return "xlsx";
+    if (ext == ".pptx" || ext == ".pptm") return "pptx";
     if (ext == ".odt") return "odt";
     if (ext == ".ods") return "ods";
     if (ext == ".odp") return "odp";
@@ -2872,6 +2872,11 @@ EditResult markdownJson(const MarkdownDocument &doc) {
 EditResult createDocument(const std::filesystem::path &file) {
     std::error_code ec;
     if (std::filesystem::exists(file, ec)) return fail("file already exists: " + media::path::path_to_utf8(file));
+    const auto ext = media::strutil::path_ext_lower(media::path::path_to_utf8(file));
+    if (ext == ".odt" || ext == ".ods" || ext == ".odp")
+        return fail("OpenDocument create is not implemented");
+    if (ext != ".docx" && ext != ".xlsx" && ext != ".pptx")
+        return fail("create needs a .docx, .xlsx, or .pptx path");
     const auto format = documentFormat(file);
     OoxmlParts parts;
     if (isOpenDocument(format)) return fail("OpenDocument create is not implemented");

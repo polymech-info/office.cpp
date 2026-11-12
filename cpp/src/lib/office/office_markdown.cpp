@@ -9,6 +9,7 @@
 #include <cctype>
 #include <map>
 #include <sstream>
+#include <vector>
 
 #include <pugixml.hpp>
 
@@ -61,6 +62,9 @@ void appendPcdata(pugi::xml_node node, std::string &out) {
             continue;
         }
         if (localNameEquals(child.name(), "instrText") || localNameEquals(child.name(), "delInstrText")) {
+            continue;
+        }
+        if (localNameEquals(child.name(), "title") || localNameEquals(child.name(), "desc")) {
             continue;
         }
         if (localNameEquals(child.name(), "a")) {
@@ -174,6 +178,13 @@ struct Writer {
         fresh = false;
     }
 
+    void image(const std::string &alt, const std::string &src) {
+        if (src.empty()) return;
+        gap();
+        out << "![" << alt << "](" << src << ")";
+        fresh = false;
+    }
+
     std::string str() const { return out.str(); }
 };
 
@@ -200,10 +211,11 @@ std::string docxParagraph(pugi::xml_node paragraph) {
     std::string text;
     for (auto child : paragraph.children()) {
         if (localNameEquals(child.name(), "r")) text += docxRunText(child);
-        else if (localNameEquals(child.name(), "hyperlink")) {
-            for (auto run : child.children()) {
-                if (localNameEquals(run.name(), "r")) text += docxRunText(run);
-            }
+        else if (localNameEquals(child.name(), "hyperlink") || localNameEquals(child.name(), "ins")) {
+            text += docxParagraph(child);
+        } else if (localNameEquals(child.name(), "sdt")) {
+            auto content = childByLocalName(child, "sdtContent");
+            if (content) text += docxParagraph(content);
         }
     }
     return text;
@@ -240,14 +252,255 @@ std::vector<std::vector<std::string>> docxTable(pugi::xml_node table) {
     return rows;
 }
 
-void renderDocx(pugi::xml_node body, Writer &writer) {
+constexpr int kMaxImages = 12;
+constexpr std::size_t kMaxImageBytes = 1500000;
+constexpr std::size_t kMaxImageTotal = 6000000;
+
+std::string base64Encode(std::string_view input) {
+    static constexpr char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((input.size() + 2) / 3) * 4);
+    std::size_t i = 0;
+    while (i + 2 < input.size()) {
+        const unsigned n = (static_cast<unsigned char>(input[i]) << 16)
+            | (static_cast<unsigned char>(input[i + 1]) << 8)
+            | static_cast<unsigned char>(input[i + 2]);
+        out.push_back(table[(n >> 18) & 63]);
+        out.push_back(table[(n >> 12) & 63]);
+        out.push_back(table[(n >> 6) & 63]);
+        out.push_back(table[n & 63]);
+        i += 3;
+    }
+    if (i < input.size()) {
+        unsigned n = static_cast<unsigned char>(input[i]) << 16;
+        if (i + 1 < input.size()) n |= static_cast<unsigned char>(input[i + 1]) << 8;
+        out.push_back(table[(n >> 18) & 63]);
+        out.push_back(table[(n >> 12) & 63]);
+        if (i + 1 < input.size()) {
+            out.push_back(table[(n >> 6) & 63]);
+            out.push_back('=');
+        } else {
+            out.push_back('=');
+            out.push_back('=');
+        }
+    }
+    return out;
+}
+
+std::string imageMime(std::string path) {
+    path = lower(std::move(path));
+    auto ends = [&](const char *ext) {
+        const auto n = std::char_traits<char>::length(ext);
+        return path.size() >= n && path.compare(path.size() - n, n, ext) == 0;
+    };
+    if (ends(".png")) return "image/png";
+    if (ends(".jpg") || ends(".jpeg")) return "image/jpeg";
+    if (ends(".gif")) return "image/gif";
+    if (ends(".webp")) return "image/webp";
+    if (ends(".bmp")) return "image/bmp";
+    if (ends(".svg")) return "image/svg+xml";
+    return {};
+}
+
+void percentDecode(std::string &text) {
+    std::string out;
+    out.reserve(text.size());
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '%' && i + 2 < text.size()) {
+            const int hi = hex(text[i + 1]);
+            const int lo = hex(text[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                out.push_back(static_cast<char>((hi << 4) | lo));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(text[i]);
+    }
+    text = std::move(out);
+}
+
+std::string joinZip(std::string_view base, std::string target) {
+    for (char &c : target) if (c == '\\') c = '/';
+    percentDecode(target);
+    std::vector<std::string> parts;
+    auto add = [&](std::string_view path) {
+        std::size_t i = 0;
+        while (i < path.size()) {
+            const auto slash = path.find('/', i);
+            const auto seg = path.substr(i, slash == std::string_view::npos ? std::string_view::npos : slash - i);
+            i = slash == std::string_view::npos ? path.size() : slash + 1;
+            if (seg.empty() || seg == ".") continue;
+            if (seg == "..") {
+                if (!parts.empty()) parts.pop_back();
+                continue;
+            }
+            parts.emplace_back(seg);
+        }
+    };
+    add(base);
+    add(target);
+    std::string out;
+    for (const auto &part : parts) {
+        if (!out.empty()) out.push_back('/');
+        out += part;
+    }
+    return out;
+}
+
+std::string markdownAlt(std::string alt) {
+    std::string out;
+    for (unsigned char c : alt) {
+        if (c == '\n' || c == '\r' || c == '[' || c == ']' || c == '(' || c == ')') continue;
+        out.push_back(static_cast<char>(c));
+    }
+    return trimmed(out);
+}
+
+struct ImageBudget {
+    const OoxmlParts *package = nullptr;
+    std::map<std::string, std::string> relToPart;
+    std::map<std::string, std::string> cache;
+    int count = 0;
+    std::size_t bytes = 0;
+    bool odf = false;
+    bool enabled = false;
+    bool embed = true;
+};
+
+std::string imageAltFrom(pugi::xml_node node) {
+    for (auto cursor = node; cursor; cursor = cursor.parent()) {
+        const bool host = localNameEquals(cursor.name(), "frame")
+            || localNameEquals(cursor.name(), "inline")
+            || localNameEquals(cursor.name(), "anchor")
+            || localNameEquals(cursor.name(), "drawing")
+            || localNameEquals(cursor.name(), "pict")
+            || localNameEquals(cursor.name(), "pic");
+        if (!host && cursor != node) continue;
+        for (auto child : cursor.children()) {
+            if (localNameEquals(child.name(), "docPr") || localNameEquals(child.name(), "cNvPr")) {
+                const auto descr = attrByLocalName(child, "descr");
+                if (!trimmed(descr).empty()) return markdownAlt(descr);
+            }
+            if (localNameEquals(child.name(), "title") || localNameEquals(child.name(), "desc")) {
+                std::string text;
+                appendPcdata(child, text);
+                if (!trimmed(text).empty()) return markdownAlt(text);
+            }
+        }
+        if (!host) continue;
+        const auto descr = attrByLocalName(cursor, "descr");
+        if (!trimmed(descr).empty()) return markdownAlt(descr);
+        const auto name = attrByLocalName(cursor, "name");
+        if (!trimmed(name).empty() && name.rfind("Picture", 0) != 0 && name.rfind("Image", 0) != 0)
+            return markdownAlt(name);
+    }
+    return {};
+}
+
+std::string relIdOf(pugi::xml_node node) {
+    std::string fallback;
+    for (auto attr : node.attributes()) {
+        const bool embed = localNameEquals(attr.name(), "embed");
+        const bool link = localNameEquals(attr.name(), "link");
+        const bool id = localNameEquals(attr.name(), "id");
+        if (!embed && !link && !id) continue;
+        const std::string value = attr.value();
+        if (value.rfind("rId", 0) == 0) return value;
+        if (fallback.empty() && (embed || link)) fallback = value;
+    }
+    return fallback;
+}
+
+void loadDocxRels(ImageBudget &images) {
+    if (images.package == nullptr) return;
+    auto found = images.package->parts.find("word/_rels/document.xml.rels");
+    if (found == images.package->parts.end()) return;
+    pugi::xml_document doc;
+    if (!doc.load_string(found->second.c_str())) return;
+    for (auto rel : doc.document_element().children()) {
+        if (!localNameEquals(rel.name(), "Relationship")) continue;
+        const auto id = attrByLocalName(rel, "Id");
+        auto target = attrByLocalName(rel, "Target");
+        if (id.empty() || target.empty()) continue;
+        if (lower(attrByLocalName(rel, "TargetMode")) == "external") continue;
+        images.relToPart[id] = joinZip("word", target);
+    }
+}
+
+const std::string *findPart(const OoxmlParts &package, const std::string &path) {
+    auto found = package.parts.find(path);
+    if (found != package.parts.end()) return &found->second;
+    const auto wanted = lower(path);
+    for (const auto &entry : package.parts) {
+        if (lower(entry.first) == wanted) return &entry.second;
+    }
+    return nullptr;
+}
+
+std::string dataUriFor(ImageBudget &images, const std::string &partPath, const std::string &cacheKey) {
+    auto cached = images.cache.find(cacheKey);
+    if (cached != images.cache.end()) return cached->second;
+    std::string uri;
+    const std::string *bytes = images.package == nullptr ? nullptr : findPart(*images.package, partPath);
+    const auto mime = imageMime(partPath);
+    if (bytes != nullptr && !mime.empty() && bytes->size() <= kMaxImageBytes
+        && images.count < kMaxImages && images.bytes + bytes->size() <= kMaxImageTotal) {
+        uri = "data:" + mime + ";base64," + base64Encode(*bytes);
+        images.count += 1;
+        images.bytes += bytes->size();
+    }
+    images.cache.emplace(cacheKey, uri);
+    return uri;
+}
+
+void emitImage(Writer &writer, ImageBudget &images, const std::string &key, const std::string &part, const std::string &alt) {
+    if (!images.embed) {
+        const auto label = markdownAlt(alt);
+        if (!label.empty()) writer.paragraph(label);
+        return;
+    }
+    if (!images.enabled) return;
+    writer.image(markdownAlt(alt), dataUriFor(images, part, key));
+}
+
+void writeEmbeddedImages(pugi::xml_node node, ImageBudget &images, Writer &writer) {
+    if (!node || (!images.enabled && images.embed)) return;
+    if (images.odf && localNameEquals(node.name(), "image")) {
+        auto href = attrByLocalName(node, "href");
+        if (href.rfind("http://", 0) == 0 || href.rfind("https://", 0) == 0) return;
+        const auto part = joinZip("", href);
+        if (!part.empty()) emitImage(writer, images, part, part, imageAltFrom(node));
+        return;
+    }
+    if (!images.odf && (localNameEquals(node.name(), "blip") || localNameEquals(node.name(), "imagedata"))) {
+        const auto id = relIdOf(node);
+        auto found = images.relToPart.find(id);
+        if (found != images.relToPart.end()) emitImage(writer, images, id, found->second, imageAltFrom(node));
+        return;
+    }
+    for (auto child : node.children()) writeEmbeddedImages(child, images, writer);
+}
+
+void renderDocx(pugi::xml_node body, Writer &writer, ImageBudget &images) {
     for (auto child : body.children()) {
         if (localNameEquals(child.name(), "p")) {
             const int level = docxHeading(child);
             if (level > 0) writer.heading(level, docxParagraph(child));
             else writer.paragraph(docxParagraph(child));
+            writeEmbeddedImages(child, images, writer);
         } else if (localNameEquals(child.name(), "tbl")) {
             writer.table(docxTable(child));
+            writeEmbeddedImages(child, images, writer);
+        } else if (localNameEquals(child.name(), "sdt")) {
+            auto content = childByLocalName(child, "sdtContent");
+            if (content) renderDocx(content, writer, images);
         }
     }
 }
@@ -416,14 +669,16 @@ std::string odfText(pugi::xml_node node) {
     return text;
 }
 
-void renderOdfBlocks(pugi::xml_node parent, Writer &writer) {
+void renderOdfBlocks(pugi::xml_node parent, Writer &writer, ImageBudget &images) {
     for (auto child : parent.children()) {
         if (localNameEquals(child.name(), "h")) {
             int level = 1;
             try { level = std::stoi(attrByLocalName(child, "outline-level")); } catch (...) { level = 1; }
             writer.heading(level, odfText(child));
+            writeEmbeddedImages(child, images, writer);
         } else if (localNameEquals(child.name(), "p")) {
             writer.paragraph(odfText(child));
+            writeEmbeddedImages(child, images, writer);
         } else if (localNameEquals(child.name(), "list")) {
             for (auto item : child.children()) {
                 if (!localNameEquals(item.name(), "list-item")) continue;
@@ -434,9 +689,12 @@ void renderOdfBlocks(pugi::xml_node parent, Writer &writer) {
                     text += trimmed(odfText(paragraph));
                 }
                 writer.bullet(text);
+                writeEmbeddedImages(item, images, writer);
             }
+        } else if (localNameEquals(child.name(), "frame") || localNameEquals(child.name(), "image")) {
+            writeEmbeddedImages(child, images, writer);
         } else if (localNameEquals(child.name(), "section")) {
-            renderOdfBlocks(child, writer);
+            renderOdfBlocks(child, writer, images);
         } else if (localNameEquals(child.name(), "table")) {
             std::vector<std::vector<std::string>> rows;
             int row_count = 0;
@@ -468,6 +726,7 @@ void renderOdfBlocks(pugi::xml_node parent, Writer &writer) {
                 for (int n = 0; n < copies && row_count + n <= kMaxRows; ++n) rows.push_back(values);
             }
             writer.table(rows);
+            writeEmbeddedImages(child, images, writer);
         }
     }
 }
@@ -530,7 +789,10 @@ void renderOdp(pugi::xml_node presentation, Writer &writer) {
             for (auto box : frame.children()) {
                 if (!localNameEquals(box.name(), "text-box") && !localNameEquals(box.name(), "p")) continue;
                 if (localNameEquals(box.name(), "p")) writer.paragraph(odfText(box));
-                else renderOdfBlocks(box, writer);
+                else {
+                    ImageBudget none;
+                    renderOdfBlocks(box, writer, none);
+                }
             }
         }
     }
@@ -542,7 +804,7 @@ bool loadXml(const std::string &xml, pugi::xml_document &doc) {
 
 } // namespace
 
-MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format) {
+MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format, bool embed_images) {
     MarkdownDocument result;
     result.format = format;
     Writer writer;
@@ -553,7 +815,12 @@ MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::strin
         if (!loadXml(part->second, doc)) return {false, "failed to parse word/document.xml", format, {}, {}};
         auto body = childByLocalName(doc.document_element(), "body");
         if (!body) return {false, "document has no body", format, {}, {}};
-        renderDocx(body, writer);
+        ImageBudget images;
+        images.package = &package;
+        images.enabled = true;
+        images.embed = embed_images;
+        loadDocxRels(images);
+        renderDocx(body, writer, images);
     } else if (format == "xlsx") {
         renderXlsx(package, writer, result.cells, result.error);
         if (!result.error.empty()) return result;
@@ -567,7 +834,14 @@ MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::strin
         if (!loadXml(part->second, doc)) return {false, "failed to parse content.xml", format, {}, {}};
         auto body = childByLocalName(doc.document_element(), "body");
         if (!body) return {false, "OpenDocument has no office:body", format, {}, {}};
-        if (auto text = childByLocalName(body, "text")) renderOdfBlocks(text, writer);
+        if (auto text = childByLocalName(body, "text")) {
+            ImageBudget images;
+            images.package = &package;
+            images.odf = true;
+            images.enabled = format == "odt";
+            images.embed = embed_images;
+            renderOdfBlocks(text, writer, images);
+        }
         else if (auto sheet = childByLocalName(body, "spreadsheet")) renderOds(sheet, writer, result.cells);
         else if (auto deck = childByLocalName(body, "presentation")) renderOdp(deck, writer);
         else return {false, "OpenDocument body is not text, spreadsheet, or presentation", format, {}, {}};
@@ -577,13 +851,26 @@ MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::strin
     return result;
 }
 
-MarkdownDocument readMarkdown(const std::filesystem::path &file) {
+MarkdownDocument readMarkdown(const std::filesystem::path &file, bool embed_images) {
     const auto format = documentFormat(file);
     if (format.empty()) return {false, "unsupported document extension", {}, {}, {}};
     std::string error;
     const auto package = readOoxmlParts(file, error);
     if (!error.empty()) return {false, error, format, {}, {}};
-    return markdownFromPackage(package, format);
+    return markdownFromPackage(package, format, embed_images);
+}
+
+bool readOfficeText(const std::filesystem::path &file, std::string &text, std::string &error) {
+    if (documentFormat(file).empty()) return false;
+    const auto doc = readMarkdown(file, false);
+    if (!doc.ok) {
+        text.clear();
+        error = doc.error.empty() ? "couldn't read the document" : doc.error;
+        return true;
+    }
+    text = doc.markdown;
+    error.clear();
+    return true;
 }
 
 } // namespace office

@@ -22,8 +22,13 @@ struct MarkdownDocument {
 
 struct OoxmlParts;
 
-// Markdown for docx, xlsx, pptx, odt, ods, and odp. Spreadsheets also fill cells.
-MarkdownDocument readMarkdown(const std::filesystem::path &file);
-MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format);
+// Markdown for docx, docm, xlsx, xlsm, pptx, pptm, odt, ods, and odp.
+// Spreadsheets also fill cells. embed_images keeps picture bytes in the markdown.
+// The reader passes false so speech hears the words and an image's alt text.
+MarkdownDocument readMarkdown(const std::filesystem::path &file, bool embed_images = true);
+MarkdownDocument markdownFromPackage(const OoxmlParts &package, const std::string &format, bool embed_images = true);
+
+// True when the extension is one this library reads. error is set when the package cannot be read.
+bool readOfficeText(const std::filesystem::path &file, std::string &text, std::string &error);
 
 } // namespace office
